@@ -23,7 +23,7 @@ This app allow to read text messages, images, stickers and voice messages. Also 
 <code>python3 microclient.py</code>
 
 <h2>Visualization</h2>
-Open http://localhost:8090/armyrf in your horny browser (or cURL, wget, python requests, lol) and funny.
+<p>Open <code>http://localhost:8090/armyrf</code> in your horny browser (or cURL, wget, python requests, lol) and funny.</p>
 <h4>Listed routes:</h4>
 <ul>
   <li>/armyrf</li>
