@@ -29,12 +29,12 @@ Open http://localhost:8090/armyrf in your horny browser (or cURL, wget, python r
   <li>/armyrf</li>
   <li>/armyrf/wat</li>
   <li>/armyrf</li>
-  <li>/armyrf/<entity_id></li>
+  <li>/armyrf/&lt;entity_id&gt;</li>
   <li>/armyrf/dl</li>
-  <li>/armyrf/dl/<filename></li>
+  <li>/armyrf/dl/&lt;filename&gt;</li>
   <li>/armyrf/reply</li>
   <li>/armyrf/search</li>
-  <li>/armyrf/search/<entity_str></li>
+  <li>/armyrf/search/&lt;entity_str&gt;</li>
   <li>/p</li>
   <li>/ua</li>
   <li>/time</li>
