@@ -1,4 +1,4 @@
-# microclient
+# microclient /ArmyRF :ru:
 Unofficial Telegram client for all devices, e.g. push-button phones.
 <br>
 <h2>Features</h2>
@@ -14,9 +14,9 @@ This app allow to read text messages, images, stickers and voice messages. Also 
 
 <h2>Configuration</h2>
 <ul>
-  <li>Obtain api credentials (api_id and api_hash) to https://my.telegram.org and put it in values.py</li>
+  <li>Obtain api credentials (<code>api_id</code> and <code>api_hash</code>) to https://my.telegram.org and put it in values.py</li>
   <li>Found session file with "session" name using Telethon</li>
-  <li>Change "aeskey" in values.py before deploying in public server
+  <li><p>Change <code>aeskey</code> in values.py before deploying in public server
 </ul>
 
 <h2>Running</h2>
