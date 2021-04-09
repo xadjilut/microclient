@@ -2,7 +2,7 @@
 Unofficial Telegram client for all devices, e.g. push-button phones.
 <br>
 <h2>Features</h2>
-This app allow to read text messages, images, stickers and voice messages. Also microclient support opening internet-sites for gathering text content without media, styles and scripts.
+This one-client-app allow to receive text messages, images, stickers and voice messages, send text and voice messages. Also microclient support opening internet-sites for gathering text content without media, styles and scripts.
 <h2>Requirements</h2>
 <ul>
   <li>FFmpeg <i>(for voice convert)</i></li>
@@ -14,9 +14,11 @@ This app allow to read text messages, images, stickers and voice messages. Also 
 
 <h2>Configuration</h2>
 <ul>
-  <li>Obtain api credentials (<code>api_id</code> and <code>api_hash</code>) to https://my.telegram.org and put it in values.py</li>
-  <li>Found session file with "session" name using Telethon</li>
-  <li><p>Change <code>aeskey</code> in values.py before deploying in public server
+  <li><p>Obtain api credentials (<code>api_id</code> and <code>api_hash</code>) to https://my.telegram.org and put it in values.py</p></li>
+  <li><p>Found session file with "session" name using Telethon in Python intepreter:</p>
+    <p><code>from telethon import TelegramClient</code><br><code>from values import api_id, api_hash</code><br><code>TelegramClient("session", api_id, api_hash).start()</code></p>
+  <p>Enter phone, code, optional password and close prompt</p></li>
+  <li><p>Change <code>aeskey</code> in values.py before deploying in public server</p>
 </ul>
 
 <h2>Running</h2>
