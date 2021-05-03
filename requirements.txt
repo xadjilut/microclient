@@ -1,4 +1,4 @@
 boilerpy3
-Flask
-Telethon==1.15.0
+quart
+Telethon
 Pillow

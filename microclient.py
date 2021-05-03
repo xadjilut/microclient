@@ -3,11 +3,13 @@
 import asyncio
 import base64
 import datetime
+import hypercorn.asyncio
 import pyaes
 import subprocess
 from boilerpy3.extractors import KeepEverythingExtractor as CanolaExtractor
 from datetime import timedelta
-from flask import Flask, request, redirect, url_for, send_file, send_from_directory, make_response
+from hypercorn.config import Config
+from quart import Quart, request, redirect, url_for, send_file, send_from_directory, make_response
 from markupsafe import escape
 from PIL import Image
 from os.path import exists, realpath
@@ -18,14 +20,22 @@ from urllib.request import urlopen, Request
 from values import api_id, api_hash, aeskey
 from werkzeug.utils import secure_filename
 
-app = Flask(__name__)
+config = Config()
+config.bind = ["0.0.0.0:8090"]
+
+app = Quart(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 200 * 1024
-global client, io_loop
-io_loop = asyncio.new_event_loop()
-asyncio.set_event_loop(io_loop)
+
 # found session file before using
 client = TelegramClient('session', api_id, api_hash)
-client.start()
+
+@app.before_serving
+async def startup():
+    await client.connect()
+
+@app.after_serving
+async def cleanup():
+    await client.disconnect()
 
 n = '\n'
 t = '/armyrf'
@@ -49,13 +59,11 @@ def hello_everybot():
 
 # main page
 @app.route(t)
-def hello():
+async def hello():
     flag, resp = hello_everybot()
     if flag: return resp
     check = False
-    global io_loop, client
-    asyncio.set_event_loop(io_loop)
-    resp = client.get_dialogs()
+    resp = await client.get_dialogs()
     text = f'<h3>Выбери чат...</h3><br><a href="{t}/wat">шта?</a>'
     for x in resp:
         mentions = ('' if x.unread_mentions_count==0 else f'<b><a href="{t}/search/{x.entity.id}?mentions={x.unread_mentions_count}">{x.unread_mentions_count}</a> @</b> ')
@@ -75,11 +83,9 @@ def wat():
 """)
 
 @app.route(t+'/<int:entity_id>', methods=['GET','POST'])
-def dialog(entity_id):
+async def dialog(entity_id):
     flag, resp = hello_everybot()
     if flag: return resp
-    global io_loop, client
-    asyncio.set_event_loop(io_loop)
     error = ''
     check = False
     pagindict = {'reverse':False}
@@ -87,12 +93,12 @@ def dialog(entity_id):
     try:
         if request.method == 'POST':
             check = True
-            if request.form.get('message'):
-                client.send_message(entity_id, request.form.get('message'), reply_to=(0 if not request.form.get('message_id') else int(request.form.get('message_id'))))
+            if (await request.form).get('message'):
+                await client.send_message(entity_id, (await request.form).get('message'), reply_to=(0 if not (await request.form).get('message_id') else int((await request.form).get('message_id'))))
     except Exception as e:
         error += f'<b><i>хуйня, давай по-новой!.. {str(e)}</i></b>'
     try:
-        entity = client.get_entity(entity_id)
+        entity = await client.get_entity(entity_id)
         if request.method == 'POST':
             sleep(0.404)
         limit = request.args.get('offset')
@@ -106,15 +112,15 @@ def dialog(entity_id):
             if message_id and not check:
                 pagindict['reverse'] = True
                 pagindict.update({'min_id':int(message_id)-1})
-        resp = client.get_messages(entity_id, 25, **pagindict)
+        resp = await client.get_messages(entity_id, 25, **pagindict)
     except Exception as e:
         return temp.replace('%', '<h1>Wrong, sorry!</h1><br>'+str(e))
     text = ''
     texthead = f'<h3>{entity.first_name + (entity.last_name if entity.last_name else "") if entity.__class__ == User else entity.title}</h3><br><a href="{t}/search/{entity_id}">поиск.</a><br>{form} {error}'
     for x in resp:
         tmptext = f'''<br><div id="{x.id}">
-{put_message_head(x, entity_id)}
-{put_content(x, True)}<br>
+{await put_message_head(x, entity_id)}
+{await put_content(x, True)}<br>
 <a href="{t}/reply?entity_id={entity_id}&message_id={x.id}">отв.</a> 
 <a href="{t}/reply?entity_id={entity_id}">чат.</a>
 </div>'''
@@ -123,20 +129,18 @@ def dialog(entity_id):
     return temp.replace('%', text)
 
 
-def put_message_head(x, entity_id):
-    global io_loop, client
-    asyncio.set_event_loop(io_loop)
+async def put_message_head(x, entity_id):
     res = ''
-    user = x.get_sender()
+    user = await x.get_sender()
     date = x.date + timedelta(hours=4)
     if user.__class__ == User and not user.is_self:
         res += f'<b>{escape(user.first_name)}{" "+escape(user.last_name) if user.last_name else ""}</b><br>'
     res += f'<i>{date.hour}:{(0 if date.minute<10 else "")}{date.minute} {date.day}.{date.month}.{date.year}</i><p>'
     if x.is_reply:
-        y = x.get_reply_message()
+        y = await x.get_reply_message()
         if not y:
             return res
-        user = y.get_sender()
+        user = await y.get_sender()
         if user.__class__ == User:
             resname = f'{escape(user.first_name)}{" "+escape(user.last_name) if user.last_name else ""}'
         else:
@@ -149,15 +153,13 @@ def put_message_head(x, entity_id):
     return res
 
 
-def put_content(x, limited=None):
-    global io_loop, client
-    asyncio.set_event_loop(io_loop)
+async def put_content(x, limited=None):
     res = ''
     if x.media.__class__ == MessageMediaPhoto:
         mediatype = x.media.photo
         img = f'static/images/{mediatype.dc_id}_{mediatype.id}.jpeg'
         if not exists(img):
-            client.download_media(x, img)
+            await client.download_media(x, img)
             im = Image.open(img)
             im.thumbnail([128, 128])
             im.save(img, 'JPEG', quality=40)
@@ -168,7 +170,7 @@ def put_content(x, limited=None):
         if mime == 'image':
             img = f'static/images/{mediatype.dc_id}_{mediatype.id}'
             if not exists(img+'.jpeg'):
-                client.download_media(x, f'{img}.{ext}')
+                await client.download_media(x, f'{img}.{ext}')
                 im = Image.open(f'{img}.{ext}')
                 if im.mode == 'RGBA':
                     im.load() 
@@ -214,20 +216,18 @@ def put_content(x, limited=None):
     return res
 
 @app.route(f'{t}/dl', methods=['GET','POST'])
-def dl():
+async def dl():
     flag, resp = hello_everybot()
     if flag: return resp
-    global io_loop, client
-    asyncio.set_event_loop(io_loop)
-    mediastr = base64.b64decode(request.form.get('media').encode('UTF-8'))
+    mediastr = base64.b64decode((await request.form).get('media').encode('UTF-8'))
     crypt = pyaes.AESModeOfOperationCTR(aeskey)
     mediastr = crypt.decrypt(mediastr).decode()
     media = eval(mediastr)
-    media.document.file_reference = base64.b64decode(request.form.get('fileref').encode('UTF-8'))
+    media.document.file_reference = base64.b64decode((await request.form).get('fileref').encode('UTF-8'))
     file = f'{media.document.dc_id}_{media.document.id}'
     if exists(dlpath+file+'.mp3'):
         return temp.replace('%', f'<a href="{t}/dl/{file}.mp3">{file}.mp3</a><p>{mediastr}')
-    client.download_media(media, dlpath+file+'.oga')
+    await client.download_media(media, dlpath+file+'.oga')
     # for voice convert to mp3. Replace this to "out = None" if heroku or you don't like voices
     out = subprocess.call(f'ffmpeg -hide_banner -i {dlpath}{file}.oga -c:a libmp3lame -q:a 7 {dlpath}{file}.mp3', shell=True, timeout=60)
     log(str(out))
@@ -237,54 +237,50 @@ def dl():
 
 
 @app.route(f'{t}/dl/<path:filename>', methods=['GET','POST'])
-def dl_path(filename):
-    return send_file(dlpath+secure_filename(filename), attachment_filename=filename)
+async def dl_path(filename):
+    return await send_file(dlpath+secure_filename(filename), attachment_filename=filename)
 
 
 @app.route(f'{t}/reply', methods=['GET','POST'])
-def reply():
+async def reply():
     flag, resp = hello_everybot()
     if flag: return resp
-    global io_loop, client
-    asyncio.set_event_loop(io_loop)
     entity_id = int(request.args.get('entity_id'))
     message_id = request.args.get('message_id')
     if request.method == 'POST':
-        voice = request.files.get('file')
+        voice = (await request.files).get('file')
         log(str(voice))
         if voice and voice.filename:
             path = f'static/upload/{secure_filename(voice.filename)}'
             voice.save(path)
             out = subprocess.call(f'ffmpeg -hide_banner -i {path} -c:a libopus -ab 48k -ac 1 {path}.ogg', shell=True, timeout=60)
             if exists(path+'.ogg'):
-                client.send_file(entity_id, path+'.ogg', voice_note=True, reply_to=(0 if not message_id else int(message_id)))
+                await client.send_file(entity_id, path+'.ogg', voice_note=True, reply_to=(0 if not message_id else int(message_id)))
             log(str(out))
         return redirect(url_for('dialog', entity_id=entity_id, message_id=message_id), code=307)
     text = f'''<h3>{"Oтвети" if message_id else "Написа"}ть в чат..</h3><br><a href="{t}/search/{entity_id}">поиск.</a><br>
                <form action="" method="post"><input type="text" name="message" />
                <input type="hidden" name="message_id" value="{(message_id if message_id is not None else 0)}" />
                <input type="submit" value='»' /></form><p>
-               {fileform}<br>{("" if not message_id else put_content(client.get_messages(entity_id, ids=[int(message_id)])[0]))}'''
+               {fileform}<br>{("" if not message_id else await put_content((await client.get_messages(entity_id, ids=[int(message_id)]))[0]))}'''
     return temp.replace('%', text)
 
 # for opening pm dialogs
 @app.route(f'{t}/search/',methods=['GET','POST'])
 @app.route(f'{t}/search/<string:entity_str>', methods=['GET','POST'])
-def search(entity_str=None):
-    global io_loop, client
-    asyncio.set_event_loop(io_loop)
+async def search(entity_str=None):
     try:
         entity_id = int(entity_str)
     except:
-        entity = client.get_entity(entity_str)
+        entity = await client.get_entity(entity_str)
         return redirect(url_for('dialog', entity_id=entity.id))
     res = ''
     results = []
     mentions = request.args.get('mentions')
     if mentions is not None:
-        results = client.get_messages(entity_id, int(mentions), search='@')
+        results = await client.get_messages(entity_id, int(mentions), search='@')
     elif request.method == 'POST':
-        results = client.get_messages(entity_id, 25, search=request.form.get('message'))
+        results = await client.get_messages(entity_id, 25, search=(await request.form).get('message'))
     for x in results:
         res += f'<div id={x.id}><a href="{t}/{entity_id}?message_id={x.id}&offset=25">{("<i>Message</i>" if not x.raw_text else x.raw_text[:20])}</a></div><p>'
     return temp.replace('%', f'<b>Чё ищем?</b><br>{form}<p>{res}')
@@ -314,6 +310,8 @@ def useragent():
 def curtime():
     return temp.replace('%', datetime.datetime.now().strftime('%H:%M:%S<br>%d %h %Y'))
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8090)
+async def main():
+    await hypercorn.asyncio.serve(app, config)
 
+if __name__ == '__main__':
+    client.loop.run_until_complete(main())
