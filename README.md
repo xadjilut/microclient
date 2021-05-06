@@ -1,4 +1,5 @@
 # microclient /ArmyRF :ru:
+<img src="https://github.com/xadjilut/microclient/blob/main/microclient_logo.jpg?raw=true" width="50%" height="30%"/>
 Unofficial Telegram client for all devices, e.g. push-button phones.
 <br>
 <h2>Features</h2>
@@ -30,7 +31,6 @@ This one-client-app allow to receive text messages, images, stickers and voice m
 <ul>
   <li>/armyrf</li>
   <li>/armyrf/wat</li>
-  <li>/armyrf</li>
   <li>/armyrf/&lt;entity_id&gt;</li>
   <li>/armyrf/dl</li>
   <li>/armyrf/dl/&lt;filename&gt;</li>
