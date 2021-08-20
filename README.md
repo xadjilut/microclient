@@ -19,7 +19,6 @@ This one-client-app allow to receive text messages, images, stickers and voice m
   <li><p>Found session file with "session" name using Telethon in Python intepreter:</p>
     <p><code>from telethon import TelegramClient</code><br><code>from values import api_id, api_hash</code><br><code>TelegramClient("session", api_id, api_hash).start()</code></p>
   <p>Enter phone, code, optional password and close prompt</p></li>
-  <li><p>Change <code>aeskey</code> in values.py before deploying in public server</p>
 </ul>
 
 <h2>Running</h2>
