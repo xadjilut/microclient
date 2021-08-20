@@ -4,20 +4,24 @@ import asyncio
 import base64
 import datetime
 import hypercorn.asyncio
+import io
 import pyaes
-import subprocess
+import random
+import re
+import sys
 from boilerpy3.extractors import KeepEverythingExtractor as CanolaExtractor
 from datetime import timedelta
 from hypercorn.config import Config
 from quart import Quart, request, redirect, url_for, send_file, send_from_directory, make_response
 from markupsafe import escape
 from PIL import Image
+from pydub import AudioSegment
 from os.path import exists, realpath
 from telethon import TelegramClient, sync
 from telethon.tl.types import User, MessageMediaPhoto, MessageMediaDocument, User, Document, DocumentAttributeAudio, DocumentAttributeFilename, MessageEntityUrl, MessageEntityTextUrl
-from time import sleep
+from time import sleep, time
 from urllib.request import urlopen, Request
-from values import api_id, api_hash, aeskey
+from values_local import api_id, api_hash
 from werkzeug.utils import secure_filename
 
 config = Config()
@@ -28,6 +32,8 @@ app.config['MAX_CONTENT_LENGTH'] = 200 * 1024
 
 # found session file before using
 client = TelegramClient('session', api_id, api_hash)
+
+aeskey = base64.b64decode(sys.argv[1].encode()) if len(sys.argv) == 2 else bytes([random.randint(0,255) for _ in range(16)])
 
 @app.before_serving
 async def startup():
@@ -40,7 +46,8 @@ async def cleanup():
 n = '\n'
 t = '/armyrf'
 dlpath = realpath('static/dl/')
-temp = "<html><head><meta charset='utf-8'><title>телега для тапика</title></head><body>%</body></html>"
+meta = '<meta property="og:title" content="телега для тапика"><meta property="og:site_name" content="/ArmyRF"><meta property="og:description" content="Микроклиент для всех. Вопросы и предложения -> @microclient"><meta property="og:image" content="https://murix.ru/0/h8.jpg"><meta property="og:image:width" content="240"><meta property="og:image:height" content="180">'
+temp = f"<html><head><meta charset='utf-8'><title>телега для тапика</title>{meta}<link rel=\"shortcut icon\" href=\"https://murix.ru/0/hU.ico\"></head><body>%</body></html>"
 form = "<form action='' method='post'><input type='text' name='message' /><input type='submit' value='»' /></form>"
 fileform = "<form action='' method='post' enctype='multipart/form-data'><input type='file' name='file' /><input type='submit' value='Speak' /></form>"
 
@@ -60,8 +67,8 @@ def hello_everybot():
 # main page
 @app.route(t)
 async def hello():
-    flag, resp = hello_everybot()
-    if flag: return resp
+#    flag, resp = hello_everybot()
+#    if flag: return resp
     check = False
     resp = await client.get_dialogs()
     text = f'<h3>Выбери чат...</h3><br><a href="{t}/wat">шта?</a>'
@@ -79,13 +86,13 @@ def wat():
 телегу для кнопочного телефона (а ведь именно такие нам разрешали использовать в части). Так, 
 понемногу, потихоньку, да и написал что-то и поднял на вдске.<h1>Ахуеть!</h1><br>Остались 
 вопросы, предложения по данному проекту - пиши в телегу @xadjilut или напрямую в 
-<a href=/armyrf/search/xadjilut>микроклиенте</a>.<br>murix, 2020
+<a href=/armyrf/search/xadjilut>микроклиенте</a>.<br>murix, 2020-2021
 """)
 
 @app.route(t+'/<int:entity_id>', methods=['GET','POST'])
 async def dialog(entity_id):
     flag, resp = hello_everybot()
-    if flag: return resp
+    if flag and request.args.get("message_id"): return resp
     error = ''
     check = False
     pagindict = {'reverse':False}
@@ -184,8 +191,8 @@ async def put_content(x, limited=None):
             fileref = base64.b64encode(x.media.document.file_reference).decode('UTF-8')
             x.media.document.file_reference = '&'
             x.media.document.attributes[0].waveform = b''
-            crypt = pyaes.AESModeOfOperationCTR(aeskey)
-            media64 = crypt.encrypt(str(x.media))
+            crypt = pyaes.AESModeOfOperationCTR(saltkey(aeskey))
+            media64 = crypt.encrypt(str(x.media).encode())
             media64 = base64.b64encode(media64).decode('UTF-8')
             res += f'<form action="{t}/dl" method="post"><input type="hidden" name="media" value="{media64}" /><input type="hidden" name="fileref" value="{fileref}" /><input type="submit" value="# ili.!.i|l {x.media.document.attributes[0].duration}s" /></form>'
     if x.message:
@@ -215,22 +222,45 @@ async def put_content(x, limited=None):
         res += ''.join(rawlist).replace(n, '<p>')
     return res
 
+# salt aeskey for additional security
+def saltkey(aeskey, prev=False):
+    base = (int(time()) >> 10) - (1 if prev else 0)
+    timestamp = base * 2**10
+    al = list(aeskey)
+    ai = 0
+    while timestamp > 0:
+        ii = timestamp % 256
+        timestamp //= 256
+        al[ai] ^= ii
+        ai += 1
+    return bytes(al)
+
 @app.route(f'{t}/dl', methods=['GET','POST'])
 async def dl():
-    flag, resp = hello_everybot()
-    if flag: return resp
+#    flag, resp = hello_everybot()
+#    if flag: return resp
     mediastr = base64.b64decode((await request.form).get('media').encode('UTF-8'))
-    crypt = pyaes.AESModeOfOperationCTR(aeskey)
-    mediastr = crypt.decrypt(mediastr).decode()
-    media = eval(mediastr)
+    i = 0
+    while 1:
+        if i >= 2: return temp.replace('%', "<h3>Сеанс истёк</h3><p>Вернись, обнови страницу и повтори снова.</p>")
+        crypt = pyaes.AESModeOfOperationCTR(saltkey(aeskey, False if i == 0 else True))
+        _mediastr = crypt.decrypt(mediastr).decode(errors="ignore")
+        try: media = eval(_mediastr)
+        except:
+            i += 1
+            continue
+        mediastr = _mediastr
+        break
     media.document.file_reference = base64.b64decode((await request.form).get('fileref').encode('UTF-8'))
     file = f'{media.document.dc_id}_{media.document.id}'
     if exists(dlpath+file+'.mp3'):
         return temp.replace('%', f'<a href="{t}/dl/{file}.mp3">{file}.mp3</a><p>{mediastr}')
-    await client.download_media(media, dlpath+file+'.oga')
-    # for voice convert to mp3. Replace this to "out = None" if heroku or you don't like voices
-    out = subprocess.call(f'ffmpeg -hide_banner -i {dlpath}{file}.oga -c:a libmp3lame -q:a 7 {dlpath}{file}.mp3', shell=True, timeout=60)
-    log(str(out))
+    input = await client.download_media(media, bytes)
+    # for voice convert to mp3
+    input = io.BytesIO(input)
+    input.seek(0)
+    segment = AudioSegment.from_file(input)
+    segment.export(f"{dlpath}{file}.mp3", "mp3", bitrate="128k", codec="libmp3lame")
     if exists(dlpath+file+'.mp3'):
         return temp.replace('%', f'<a href="{t}/dl/{file}.mp3">{file}.mp3</a><p>{mediastr}')
     return temp.replace('%', str(media.document.file_reference))
@@ -243,20 +273,21 @@ async def dl_path(filename):
 
 @app.route(f'{t}/reply', methods=['GET','POST'])
 async def reply():
-    flag, resp = hello_everybot()
-    if flag: return resp
+#    flag, resp = hello_everybot()
+#    if flag: return resp
     entity_id = int(request.args.get('entity_id'))
     message_id = request.args.get('message_id')
     if request.method == 'POST':
         voice = (await request.files).get('file')
+        if voice:
+            try: segment = AudioSegment.from_file(voice)
+            except: return temp.replace('%', '<h3>Это не медиа!</h3><p>Чё ахуели там?..</p>')
         log(str(voice))
         if voice and voice.filename:
             path = f'static/upload/{secure_filename(voice.filename)}'
-            voice.save(path)
-            out = subprocess.call(f'ffmpeg -hide_banner -i {path} -c:a libopus -ab 48k -ac 1 {path}.ogg', shell=True, timeout=60)
-            if exists(path+'.ogg'):
-                await client.send_file(entity_id, path+'.ogg', voice_note=True, reply_to=(0 if not message_id else int(message_id)))
-            log(str(out))
+            segment.export(f"{path}", "ogg", bitrate="48k", codec="libopus")
+            if exists(path):
+                await client.send_file(entity_id, path, voice_note=True, reply_to=(0 if not message_id else int(message_id)))
         return redirect(url_for('dialog', entity_id=entity_id, message_id=message_id), code=307)
     text = f'''<h3>{"Oтвети" if message_id else "Написа"}ть в чат..</h3><br><a href="{t}/search/{entity_id}">поиск.</a><br>
                <form action="" method="post"><input type="text" name="message" />
@@ -289,9 +320,10 @@ async def search(entity_str=None):
 @app.route('/p')
 def proxy():
     url = request.full_path[5:]
+    log(''.join(request.full_path))
+    if re.fullmatch(r"\bhttps?://(?:localhost|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d{1,5})?/?", url) or request.url_root.split('://')[-1] in url:
+        return temp.replace('%', 'Prevented url, try again')
     try:
-        #ua = request.headers.get('User-Agent')
-        #f = urlopen(Request(url, headers={'User-Agent':ua, 'accept':'*/*'}))
         f = urlopen(url)
         text = f.readlines()
         html = ''.join([x.decode(errors='ignore') for x in text])
@@ -314,4 +346,5 @@ async def main():
     await hypercorn.asyncio.serve(app, config)
 
 if __name__ == '__main__':
+    print(f"microclient is started\n\nAeskey for debug (base64): {base64.b64encode(aeskey).decode()}\n")
     client.loop.run_until_complete(main())

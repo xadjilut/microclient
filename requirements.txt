@@ -2,3 +2,4 @@ boilerpy3
 quart
 Telethon
 Pillow
+pydub
