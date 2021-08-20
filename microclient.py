@@ -21,7 +21,7 @@ from telethon import TelegramClient, sync
 from telethon.tl.types import User, MessageMediaPhoto, MessageMediaDocument, User, Document, DocumentAttributeAudio, DocumentAttributeFilename, MessageEntityUrl, MessageEntityTextUrl
 from time import sleep, time
 from urllib.request import urlopen, Request
-from values_local import api_id, api_hash
+from values import api_id, api_hash
 from werkzeug.utils import secure_filename
 
 config = Config()
