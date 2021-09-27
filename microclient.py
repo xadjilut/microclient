@@ -74,24 +74,29 @@ async def hello():
     text = f'<h3>Выбери чат...</h3><br><a href="{t}/wat">шта?</a>'
     for x in resp:
         mentions = ('' if x.unread_mentions_count==0 else f'<b><a href="{t}/search/{x.entity.id}?mentions={x.unread_mentions_count}">{x.unread_mentions_count}</a> @</b> ')
-        text += f'<br><a href="{t}/{x.entity.id}">{escape(x.name)}</a> {mentions}(<a href="{t}/{x.entity.id}?offset={x.unread_count}">{x.unread_count})</a>'
+        if x.entity.id != 777000: text += f'<br><a href="{t}/{x.entity.id}">{escape(x.name)}</a> {mentions}(<a href="{t}/{x.entity.id}?offset={x.unread_count}">{x.unread_count})</a>'
     return temp.replace('%', text)
 
 @app.route(t+'/wat')
 def wat():
-    return temp.replace('%', """<h3>Что за дичь?</h3><br>Это - самопальный веб-клиент Телеграма
+    return temp.replace('%', """<h3>Что за дичь?</h3><br>
+<img src='http://murix.ru/0/hk.gif'/></br><br>Это - самопальный веб-клиент Телеграма
 , созданный для самых слабеньких и стареньких браузеров. Создан для таких браузеров, которые, 
-например, стоят на кнопочных телефонах.<br><h2>Но зачем?</h2><br>История данного клиента 
+например, стоят на кнопочных телефонах.</br><h2>Но зачем?</h2><br>История данного клиента 
 начинается с середины 2020-ого года. Тогда я ещё служил в армии и думал, как бы хорошо написать 
 телегу для кнопочного телефона (а ведь именно такие нам разрешали использовать в части). Так, 
-понемногу, потихоньку, да и написал что-то и поднял на вдске.<h1>Ахуеть!</h1><br>Остались 
+понемногу, потихоньку, да и написал что-то и поднял на вдске.</br><h1>Ахуеть!</h1><br>Остались 
 вопросы, предложения по данному проекту - пиши в телегу @xadjilut или напрямую в 
-<a href=/armyrf/search/xadjilut>микроклиенте</a>.<br>murix, 2020-2021
+<a href=/armyrf/search/xadjilut>микроклиенте</a>.
+</br><p>Исходный код проекта: <a href='https://github.com/xadjilut/microclient'>
+https://github.com/xadjilut/microclient</a></p>
+<br>murix, 2020-2021
 """)
 
 @app.route(t+'/<int:entity_id>', methods=['GET','POST'])
 async def dialog(entity_id):
     flag, resp = hello_everybot()
+    if entity_id == 777000: return temp.replace('%', "Hi!")
     if flag and request.args.get("message_id"): return resp
     error = ''
     check = False
@@ -273,9 +278,10 @@ async def dl_path(filename):
 
 @app.route(f'{t}/reply', methods=['GET','POST'])
 async def reply():
-#    flag, resp = hello_everybot()
+    flag, resp = hello_everybot()
 #    if flag: return resp
     entity_id = int(request.args.get('entity_id'))
+    if entity_id == 777000: return temp.replace('%', "Hi!")
     message_id = request.args.get('message_id')
     if request.method == 'POST':
         voice = (await request.files).get('file')
@@ -305,6 +311,7 @@ async def search(entity_str=None):
     except:
         entity = await client.get_entity(entity_str)
         return redirect(url_for('dialog', entity_id=entity.id))
+    if entity_id == 777000: return temp.replace('%', "Hi!")
     res = ''
     results = []
     mentions = request.args.get('mentions')
