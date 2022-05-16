@@ -1,357 +1,349 @@
-# by XADJILUT, 2020-2021
+# by XADJILUT, 2020-2022
 
-import asyncio
 import base64
 import datetime
-import hypercorn.asyncio
 import io
-import pyaes
-import random
+import logging
 import re
-import sys
-from boilerpy3.extractors import KeepEverythingExtractor as CanolaExtractor
-from datetime import timedelta
-from hypercorn.config import Config
-from quart import Quart, request, redirect, url_for, send_file, send_from_directory, make_response
-from markupsafe import escape
-from PIL import Image
-from pydub import AudioSegment
-from os.path import exists, realpath
-from telethon import TelegramClient, sync
-from telethon.tl.types import User, MessageMediaPhoto, MessageMediaDocument, User, Document, DocumentAttributeAudio, DocumentAttributeFilename, MessageEntityUrl, MessageEntityTextUrl
-from time import sleep, time
+import time
+from asyncio import sleep
+from html import escape
+from os.path import exists
 from urllib.request import urlopen, Request
-from values import api_id, api_hash
+
+import hypercorn.asyncio
+import pyaes
+from boilerpy3.extractors import KeepEverythingExtractor as CanolaExtractor
+from pydub import AudioSegment
+from quart import request, redirect, url_for, send_file, session, g
+from quart_rate_limiter import rate_limit
+from telethon import TelegramClient
+from telethon.tl.types import User, MessageMediaDocument, Document, DocumentAttributeAudio, DocumentAttributeFilename
 from werkzeug.utils import secure_filename
 
-config = Config()
-config.bind = ["0.0.0.0:8090"]
+from authorization import auth_required, guest_client
+from helper import put_message_head, put_content, saltkey, hello_everybot, aeskey, get_title_or_name, pack_xid, \
+    xid2id, unpack_xid
+from ipworker import IpWorker
+from micrologging import log
+from values import my_tz, app, temp, t, config, fileform, form, dlpath, authform, current_sessions, tgevents, wattext
 
-app = Quart(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 200 * 1024
 
-# found session file before using
-client = TelegramClient('session', api_id, api_hash)
+@app.route('/')
+async def alias():
+    return redirect(url_for('hello'), 307)
 
-aeskey = base64.b64decode(sys.argv[1].encode()) if len(sys.argv) == 2 else bytes([random.randint(0,255) for _ in range(16)])
-
-@app.before_serving
-async def startup():
-    await client.connect()
-
-@app.after_serving
-async def cleanup():
-    await client.disconnect()
-
-n = '\n'
-t = '/armyrf'
-dlpath = realpath('static/dl/')
-meta = '<meta property="og:title" content="телега для тапика"><meta property="og:site_name" content="/ArmyRF"><meta property="og:description" content="Микроклиент для всех. Вопросы и предложения -> @microclient"><meta property="og:image" content="https://murix.ru/0/h8.jpg"><meta property="og:image:width" content="240"><meta property="og:image:height" content="180">'
-temp = f"<html><head><meta charset='utf-8'><title>телега для тапика</title>{meta}<link rel=\"shortcut icon\" href=\"https://murix.ru/0/hU.ico\"></head><body>%</body></html>"
-form = "<form action='' method='post'><input type='text' name='message' /><input type='submit' value='»' /></form>"
-fileform = "<form action='' method='post' enctype='multipart/form-data'><input type='file' name='file' /><input type='submit' value='Speak' /></form>"
-
-def log(string):
-    with open('microlog', 'a') as f:
-        f.write(string + '\n')
-
-# for most angry search engine bots
-def hello_everybot():
-    useragent = request.headers.get('User-Agent')
-    if 'Googlebot' in useragent:
-        return True, temp.replace('%', 'Hi, Googlebot!')
-    elif 'YandexBot' in useragent:
-        return True, temp.replace('%', 'Hello, YandexBot!')
-    return False, None
 
 # main page
 @app.route(t)
+@rate_limit(3, datetime.timedelta(seconds=3))
+@auth_required
 async def hello():
-#    flag, resp = hello_everybot()
-#    if flag: return resp
-    check = False
-    resp = await client.get_dialogs()
-    text = f'<h3>Выбери чат...</h3><br><a href="{t}/wat">шта?</a>'
-    for x in resp:
-        mentions = ('' if x.unread_mentions_count==0 else f'<b><a href="{t}/search/{x.entity.id}?mentions={x.unread_mentions_count}">{x.unread_mentions_count}</a> @</b> ')
-        if x.entity.id != 777000: text += f'<br><a href="{t}/{x.entity.id}">{escape(x.name)}</a> {mentions}(<a href="{t}/{x.entity.id}?offset={x.unread_count}">{x.unread_count})</a>'
+    client: TelegramClient = g.__getattr__(session['client_id'])
+    me = await client.get_me()
+    text = f'<p><a href="{t}/profile">{get_title_or_name(me)}</a></p>'
+
+    if await client.is_bot():
+        text += '<h3>Найди чат</h3><br>'
+        text += authform.format(
+            type='text', name='search', hint='@username или ID...', button='ок'
+        )
+        text += f'<br><a href="{t}/wat">шта?</a>'
+        return temp.replace('%', text)
+
+    offset = request.args.get("offset", '0')
+    if offset.isnumeric():
+        offset = int(offset)
+    else:
+        offset = 0
+    text += f'<h3>Выбери чат...</h3><br><a href="{t}/wat">шта?</a>'
+    i = -1
+    async for x in client.iter_dialogs(limit=50+offset):
+        i += 1
+        if i < offset or x.entity.id == me.id:
+            continue
+        mentions = ''
+        xid = pack_xid(
+            x.entity.id, getattr(x.input_entity, 'access_hash', -1488), x.is_user
+        )
+        if x.unread_mentions_count > 0:
+            mentions = f'<b><a href="{t}/search/{xid}?mentions={x.unread_mentions_count}">' \
+                       f'{x.unread_mentions_count}</a> @</b> '
+        if x.entity.id != 777000 or client != guest_client:
+            text += f'<br><a href="{t}/{xid}">{escape(x.name)}</a> {mentions}(<a href="{t}/{xid}' \
+                    f'?offset={x.unread_count}">{x.unread_count})</a>'
+    text += '<br><br>'
+    if offset:
+        text += f'<a href="{t}?offset={offset-50}">{escape("<<<")}</a> '
+    if i > offset:
+        text += f'<a href="{t}?offset={offset+50}">{escape(">>>")}</a>'
     return temp.replace('%', text)
 
-@app.route(t+'/wat')
-def wat():
-    return temp.replace('%', """<h3>Что за дичь?</h3><br>
-<img src='http://murix.ru/0/hk.gif'/></br><br>Это - самопальный веб-клиент Телеграма
-, созданный для самых слабеньких и стареньких браузеров. Создан для таких браузеров, которые, 
-например, стоят на кнопочных телефонах.</br><h2>Но зачем?</h2><br>История данного клиента 
-начинается с середины 2020-ого года. Тогда я ещё служил в армии и думал, как бы хорошо написать 
-телегу для кнопочного телефона (а ведь именно такие нам разрешали использовать в части). Так, 
-понемногу, потихоньку, да и написал что-то и поднял на вдске.</br><h1>Ахуеть!</h1><br>Остались 
-вопросы, предложения по данному проекту - пиши в телегу @xadjilut или напрямую в 
-<a href=/armyrf/search/xadjilut>микроклиенте</a>.
-</br><p>Исходный код проекта: <a href='https://github.com/xadjilut/microclient'>
-https://github.com/xadjilut/microclient</a></p>
-<br>murix, 2020-2021
-""")
 
-@app.route(t+'/<int:entity_id>', methods=['GET','POST'])
-async def dialog(entity_id):
+@app.route(f'{t}/profile')
+@auth_required
+async def profile():
+    client: TelegramClient = g.__getattr__(session['client_id'])
+    me = await client.get_me()
+    text = f'<p><b>{get_title_or_name(me)}</b><br>'
+    if request.cookies.get("_guest", "1") == '1':
+        if request.cookies.get("varstr"):
+            text += f'<a href="{t}/auth?mode=norm">в свой аккаунт...</a>'
+        else:
+            text += f'<a href="{t}/logout">авторизоваться</a>'
+    else:
+        text += f'<a href="{t}/auth?mode=guest">в гостевой аккаунт...</a>' \
+                f'<br><a href="{t}/logout">выйти</a>'
+    text += '</p>'
+    return temp.replace('%', text)
+    pass
+
+
+@app.route(f'{t}/wat')
+def wat():
+    return temp.replace('%', wattext)
+
+
+@app.route(f'{t}/<int:xid>', methods=['GET', 'POST'])
+@rate_limit(3, datetime.timedelta(seconds=3))
+@rate_limit(30, datetime.timedelta(minutes=3))
+@auth_required
+async def dialog(xid):
     flag, resp = hello_everybot()
-    if entity_id == 777000: return temp.replace('%', "Hi!")
-    if flag and request.args.get("message_id"): return resp
+    entity_id = xid2id(xid)
+    client: TelegramClient = g.__getattr__(session['client_id'])
+    if entity_id == 777000 and client == guest_client:
+        return temp.replace('%', tgevents)
+    if flag and request.args.get("message_id"):
+        return resp
     error = ''
-    check = False
-    pagindict = {'reverse':False}
+    check = request.args.get("check")
+    pagindict = {'reverse': False}
     message_id = request.args.get('message_id')
+    peer = unpack_xid(xid)
     try:
-        if request.method == 'POST':
-            check = True
-            if (await request.form).get('message'):
-                await client.send_message(entity_id, (await request.form).get('message'), reply_to=(0 if not (await request.form).get('message_id') else int((await request.form).get('message_id'))))
+        entity = await client.get_entity(peer)
     except Exception as e:
-        error += f'<b><i>хуйня, давай по-новой!.. {str(e)}</i></b>'
+        log(f"peer not found - {e}")
+        return temp.replace('%', "<h1>404</h1>Peer not found")
     try:
-        entity = await client.get_entity(entity_id)
         if request.method == 'POST':
-            sleep(0.404)
+            request_form = await request.form
+            if request_form.get('message'):
+                await client.send_message(
+                    peer,
+                    request_form.get('message'),
+                    reply_to=0 if not request_form.get('message_id') else int(request_form.get('message_id'))
+                )
+                await sleep(0.404)
+                return redirect(url_for('dialog', xid=xid, check=True))
+    except Exception as e:
+        error += f'<b><i>хуйня, давай по-новой!.. {e}</i></b>'
+    try:
         limit = request.args.get('offset')
         page = request.args.get('page')
         if page:
             pagindict['reverse'] = True
-            pagindict.update({'add_offset':25-(int(page)*25), 'min_id':1})
+            pagindict.update({'add_offset': 25 - (int(page) * 25), 'min_id': 1})
         else:
             if limit:
-                pagindict.update({'add_offset':int(limit)-25})
+                pagindict.update({'add_offset': int(limit) - 25})
             if message_id and not check:
                 pagindict['reverse'] = True
-                pagindict.update({'min_id':int(message_id)-1})
-        resp = await client.get_messages(entity_id, 25, **pagindict)
+                pagindict.update({'min_id': int(message_id) - 1})
+        resp = await client.get_messages(entity, 25, **pagindict)
     except Exception as e:
-        return temp.replace('%', '<h1>Wrong, sorry!</h1><br>'+str(e))
+        return temp.replace('%', f'<h1>Wrong, sorry!</h1>{e}')
     text = ''
-    texthead = f'<h3>{entity.first_name + (entity.last_name if entity.last_name else "") if entity.__class__ == User else entity.title}</h3><br><a href="{t}/search/{entity_id}">поиск.</a><br>{form} {error}'
+    texthead = '<h3>' + get_title_or_name(entity) if not getattr(entity, 'deleted', 0) else ''
+    texthead += f'</h3><br><a href="{t}/search/{xid}">поиск.</a><br>{form} {error}'
     for x in resp:
         tmptext = f'''<br><div id="{x.id}">
-{await put_message_head(x, entity_id)}
-{await put_content(x, True)}<br>
-<a href="{t}/reply?entity_id={entity_id}&message_id={x.id}">отв.</a> 
-<a href="{t}/reply?entity_id={entity_id}">чат.</a>
+{await put_message_head(x, xid)}
+{await put_content(x, client, True)}<br>
+<a href="{t}/reply?xid={xid}&message_id={x.id}">отв.</a> 
+<a href="{t}/reply?xid={xid}">чат.</a>
 </div>'''
-        text = (tmptext+text if not pagindict['reverse'] and not check else text+tmptext)
+        text = (tmptext + text if not pagindict['reverse'] and not check else text + tmptext)
     text = texthead + text
     return temp.replace('%', text)
 
 
-async def put_message_head(x, entity_id):
-    res = ''
-    user = await x.get_sender()
-    date = x.date + timedelta(hours=4)
-    if user.__class__ == User and not user.is_self:
-        res += f'<b>{escape(user.first_name)}{" "+escape(user.last_name) if user.last_name else ""}</b><br>'
-    res += f'<i>{date.hour}:{(0 if date.minute<10 else "")}{date.minute} {date.day}.{date.month}.{date.year}</i><p>'
-    if x.is_reply:
-        y = await x.get_reply_message()
-        if not y:
-            return res
-        user = await y.get_sender()
-        if user.__class__ == User:
-            resname = f'{escape(user.first_name)}{" "+escape(user.last_name) if user.last_name else ""}'
-        else:
-            resname = f'{user}'
-        if y.raw_text:
-            restext = f'<br><i>{escape(y.raw_text[:10])}</i>'
-        else:
-            restext = f'<br>NotTextMessage'
-        res += f'<a href="{t}/{entity_id}?message_id={y.id}"><i>»{resname[:10]}</i>{restext}</a><p>'
-    return res
-
-
-async def put_content(x, limited=None):
-    res = ''
-    if x.media.__class__ == MessageMediaPhoto:
-        mediatype = x.media.photo
-        img = f'static/images/{mediatype.dc_id}_{mediatype.id}.jpeg'
-        if not exists(img):
-            await client.download_media(x, img)
-            im = Image.open(img)
-            im.thumbnail([128, 128])
-            im.save(img, 'JPEG', quality=40)
-        res += f'<img src="/{img}"/><p>'
-    if x.media.__class__ == MessageMediaDocument:
-        mediatype = x.media.document
-        mime, ext = mediatype.mime_type.split('/')
-        if mime == 'image':
-            img = f'static/images/{mediatype.dc_id}_{mediatype.id}'
-            if not exists(img+'.jpeg'):
-                await client.download_media(x, f'{img}.{ext}')
-                im = Image.open(f'{img}.{ext}')
-                if im.mode == 'RGBA':
-                    im.load() 
-                    background = Image.new("RGB", im.size, (255, 255, 255))
-                    background.paste(im, mask=im.split()[3])
-                    im = background
-                im.thumbnail([102, 102])
-                im.save(img+'.jpeg', 'JPEG', quality=40)
-            res += f'<img src="/{img}.jpeg"/><p>'
-        elif mime == 'audio' and ext == 'ogg':
-            fileref = base64.b64encode(x.media.document.file_reference).decode('UTF-8')
-            x.media.document.file_reference = '&'
-            x.media.document.attributes[0].waveform = b''
-            crypt = pyaes.AESModeOfOperationCTR(saltkey(aeskey))
-            media64 = crypt.encrypt(str(x.media).encode())
-            media64 = base64.b64encode(media64).decode('UTF-8')
-            res += f'<form action="{t}/dl" method="post"><input type="hidden" name="media" value="{media64}" /><input type="hidden" name="fileref" value="{fileref}" /><input type="submit" value="# ili.!.i|l {x.media.document.attributes[0].duration}s" /></form>'
-    if x.message:
-        raw = (x.raw_text[:100]+'...' if limited and x.fwd_from else x.raw_text)
-        if x.entities is None:
-            entities = []
-        else:
-            entities = x.entities
-        rawlist = [(escape(raw) if not entities else escape(raw[:entities[0].offset]))]
-        lenent = len(entities)
-        for y in range(lenent):
-            o = entities[y].offset
-            l = entities[y].length
-            url = None
-            if entities[y].__class__ == MessageEntityUrl:
-                url = raw[o:o+l]
-            elif entities[y].__class__ == MessageEntityTextUrl:
-                url = entities[y].url
-            if url is not None:
-                rawlist.append(f'<a href="/p?u={url}">{escape(raw[o:o+l])}</a>')
-            else:
-                rawlist.append(escape(raw[o:o+l]))
-            if y + 1 != lenent:
-                rawlist.append(escape(raw[o+l:entities[y+1].offset]))
-            else:
-                rawlist.append(escape(raw[o+l:]))
-        res += ''.join(rawlist).replace(n, '<p>')
-    return res
-
-# salt aeskey for additional security
-def saltkey(aeskey, prev=False):
-    base = (int(time()) >> 10) - (1 if prev else 0)
-    timestamp = base * 2**10
-    al = list(aeskey)
-    ai = 0
-    while timestamp > 0:
-        ii = timestamp % 256
-        timestamp //= 256
-        al[ai] ^= ii
-        ai += 1
-    return bytes(al)
-
-@app.route(f'{t}/dl', methods=['GET','POST'])
+@app.route(f'{t}/dl/', methods=['GET', 'POST'])
+@rate_limit(5, datetime.timedelta(seconds=10))
+@auth_required
 async def dl():
-#    flag, resp = hello_everybot()
-#    if flag: return resp
     mediastr = base64.b64decode((await request.form).get('media').encode('UTF-8'))
+    media = None
     i = 0
     while 1:
-        if i >= 2: return temp.replace('%', "<h3>Сеанс истёк</h3><p>Вернись, обнови страницу и повтори снова.</p>")
+        if i >= 2:
+            return temp.replace('%', "<h3>Сеанс загрузки истёк</h3><p>Вернись, обнови страницу и повтори снова.</p>")
         crypt = pyaes.AESModeOfOperationCTR(saltkey(aeskey, False if i == 0 else True))
         _mediastr = crypt.decrypt(mediastr).decode(errors="ignore")
-        try: media = eval(_mediastr)
-        except:
+        try:
+            media = eval(_mediastr)
+        except Exception as e:
+            log(f'dl: {e}')
             i += 1
             continue
         mediastr = _mediastr
         break
     media.document.file_reference = base64.b64decode((await request.form).get('fileref').encode('UTF-8'))
     file = f'{media.document.dc_id}_{media.document.id}'
-    if exists(dlpath+file+'.mp3'):
+    if exists(dlpath + file + '.mp3'):
         return temp.replace('%', f'<a href="{t}/dl/{file}.mp3">{file}.mp3</a><p>{mediastr}')
+    client: TelegramClient = g.__getattr__(session['client_id'])
     input = await client.download_media(media, bytes)
     # for voice convert to mp3
     input = io.BytesIO(input)
     input.seek(0)
     segment = AudioSegment.from_file(input)
     segment.export(f"{dlpath}{file}.mp3", "mp3", bitrate="128k", codec="libmp3lame")
-    if exists(dlpath+file+'.mp3'):
+    if exists(dlpath + file + '.mp3'):
         return temp.replace('%', f'<a href="{t}/dl/{file}.mp3">{file}.mp3</a><p>{mediastr}')
     return temp.replace('%', str(media.document.file_reference))
 
 
-@app.route(f'{t}/dl/<path:filename>', methods=['GET','POST'])
+@app.route(f'{t}/dl/<path:filename>', methods=['GET', 'POST'])
 async def dl_path(filename):
-    return await send_file(dlpath+secure_filename(filename), attachment_filename=filename)
+    return await send_file(dlpath + secure_filename(filename), attachment_filename=filename)
 
 
-@app.route(f'{t}/reply', methods=['GET','POST'])
+@app.route(f'{t}/reply', methods=['GET', 'POST'])
+@rate_limit(3, datetime.timedelta(seconds=3))
+@auth_required
 async def reply():
-    flag, resp = hello_everybot()
-#    if flag: return resp
-    entity_id = int(request.args.get('entity_id'))
-    if entity_id == 777000: return temp.replace('%', "Hi!")
+    xid = int(request.args.get('xid'))
+    entity_id = xid2id(xid)
+    client: TelegramClient = g.__getattr__(session['client_id'])
+    if entity_id == 777000 and client == guest_client:
+        return temp.replace('%', tgevents)
     message_id = request.args.get('message_id')
+    peer = unpack_xid(xid)
     if request.method == 'POST':
         voice = (await request.files).get('file')
         if voice:
-            try: segment = AudioSegment.from_file(voice)
-            except: return temp.replace('%', '<h3>Это не медиа!</h3><p>Чё ахуели там?..</p>')
+            try:
+                segment = AudioSegment.from_file(voice)
+            except Exception as e:
+                log(f"reply: {e}")
+                return temp.replace('%', '<h3>Это не медиа!</h3><p>Чё ахуели там?..</p>')
         log(str(voice))
         if voice and voice.filename:
             path = f'static/upload/{secure_filename(voice.filename)}'
             segment.export(f"{path}", "ogg", bitrate="48k", codec="libopus")
             if exists(path):
-                await client.send_file(entity_id, path, voice_note=True, reply_to=(0 if not message_id else int(message_id)))
-        return redirect(url_for('dialog', entity_id=entity_id, message_id=message_id), code=307)
-    text = f'''<h3>{"Oтвети" if message_id else "Написа"}ть в чат..</h3><br><a href="{t}/search/{entity_id}">поиск.</a><br>
-               <form action="" method="post"><input type="text" name="message" />
-               <input type="hidden" name="message_id" value="{(message_id if message_id is not None else 0)}" />
-               <input type="submit" value='»' /></form><p>
-               {fileform}<br>{("" if not message_id else await put_content((await client.get_messages(entity_id, ids=[int(message_id)]))[0]))}'''
+                await client.send_file(
+                    peer, path, voice_note=True,
+                    reply_to=(0 if not message_id else int(message_id))
+                )
+        return redirect(url_for('dialog', xid=xid, message_id=message_id), code=307)
+    text = f'''<h3>{"Oтвети" if message_id else "Написа"}ть в чат..</h3><br><a href="{t}/search/{xid}">поиск.</a>
+<br><form action="" method="post"><p><textarea type='text' name='message' rows'3' cols='15'></textarea></p>
+<input type="hidden" name="message_id" value="{(message_id if message_id is not None else 0)}" />
+<p><input type="submit" value='»' /></p></form><p>
+{fileform}</p><br>{"" 
+if not message_id else await put_content((await client.get_messages(peer, ids=[int(message_id)]))[0], client)}'''
     return temp.replace('%', text)
 
-# for opening pm dialogs
-@app.route(f'{t}/search/',methods=['GET','POST'])
-@app.route(f'{t}/search/<string:entity_str>', methods=['GET','POST'])
-async def search(entity_str=None):
-    try:
-        entity_id = int(entity_str)
-    except:
+
+# for opening pm dialogs and searching by username
+@app.route(f'{t}/search', methods=['GET', 'POST'])
+@app.route(f'{t}/search/<string:entity_str>', methods=['GET', 'POST'])
+@rate_limit(5, datetime.timedelta(seconds=10))
+@auth_required
+async def search(entity_str=''):
+    client: TelegramClient = g.__getattr__(session['client_id'])
+    if not entity_str:
+        entity_str = request.args.get("entity", 'me')
+    if not entity_str.isnumeric():
         entity = await client.get_entity(entity_str)
-        return redirect(url_for('dialog', entity_id=entity.id))
-    if entity_id == 777000: return temp.replace('%', "Hi!")
+        xid = pack_xid(entity.id, entity.access_hash, isinstance(entity, User))
+        return redirect(url_for('dialog', xid=xid))
+    xid = int(entity_str)
+    entity_id = xid2id(xid)
+    if entity_id == 777000 and client == guest_client:
+        return temp.replace('%', tgevents)
     res = ''
     results = []
     mentions = request.args.get('mentions')
+    peer = unpack_xid(xid)
     if mentions is not None:
-        results = await client.get_messages(entity_id, int(mentions), search='@')
+        results = await client.get_messages(peer, int(mentions), search='@')
     elif request.method == 'POST':
-        results = await client.get_messages(entity_id, 25, search=(await request.form).get('message'))
+        results = await client.get_messages(peer, 25, search=(await request.form).get('message'))
     for x in results:
-        res += f'<div id={x.id}><a href="{t}/{entity_id}?message_id={x.id}&offset=25">{("<i>Message</i>" if not x.raw_text else x.raw_text[:20])}</a></div><p>'
+        res += f'<div id={x.id}><a href="{t}/{xid}?message_id={x.id}&offset=25">' \
+               f'{"<i>Message</i>" if not x.raw_text else x.raw_text[:20]}</a></div><p>'
     return temp.replace('%', f'<b>Чё ищем?</b><br>{form}<p>{res}')
+
 
 # proxy (work with variable success)
 @app.route('/p')
+@rate_limit(15, datetime.timedelta(minutes=1))
 def proxy():
     url = request.full_path[5:]
-    log(''.join(request.full_path))
-    if re.fullmatch(r"\bhttps?://(?:localhost|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d{1,5})?/?", url) or request.url_root.split('://')[-1] in url:
+    logging.info(''.join(request.full_path))
+    domain = url.strip('/').split('://')[-1].split('/')[0].split(':')[0]
+    if domain in ['t.me', 'telegram.me']:
+        if '/addtheme/' not in url and '/c/' not in url:
+            return redirect(url_for("search", entity=url), 307)
+    if (IpWorker.is_ip(domain) and IpWorker.ip_spec_contains(domain)) \
+            or request.url_root.strip('/').split('://')[-1] in url:
         return temp.replace('%', 'Prevented url, try again')
     try:
-        f = urlopen(url)
+        r = Request(url)
+        for k, v in request.headers.items():
+            if k in ["User-Agent", "Accept"]:
+                r.add_header(k, v)
+        f = urlopen(r)
         text = f.readlines()
         html = ''.join([x.decode(errors='ignore') for x in text])
     except Exception as e:
-        return temp.replace('%', 'Wrong url, try again<br>'+str(e))
+        return temp.replace('%', '<h3>Wrong url, try again</h3>' + str(e))
     ehtml = CanolaExtractor().get_doc(html)
     return temp.replace('%', ehtml.content.replace('\n', '<br>'))
 
+
 # client's user-agent
 @app.route('/ua')
-def useragent():
+def user_agent():
     return temp.replace('%', str(request.headers))
+
 
 # server time
 @app.route('/time')
 def curtime():
-    return temp.replace('%', datetime.datetime.now().strftime('%H:%M:%S<br>%d %h %Y'))
+    return temp.replace('%', datetime.datetime.now(my_tz).strftime('%H:%M:%S<br>%Y-%h-%d'))
+
+
+# @app.errorhandler(404)
+# async def not_found(e):
+#     logging.info(f"404 - {e}")
+#     return temp.replace('%', "<h1>404</h1>Page not found")
+
 
 async def main():
     await hypercorn.asyncio.serve(app, config)
 
+
+async def clean_sessions_loop():
+    while True:
+        await sleep(60 * 20)
+        i = 0
+        sessions = [x for x in current_sessions.keys()]
+        for sess in sessions:
+            expires_in = current_sessions[sess].get('expires_in')
+            if expires_in and time.time() > expires_in:
+                del current_sessions[sess]
+                i += 1
+        if i:
+            logging.info(f"complete sessions cleaning, {i} sessions are removed")
+
+
 if __name__ == '__main__':
     print(f"microclient is started\n\nAeskey for debug (base64): {base64.b64encode(aeskey).decode()}\n")
-    client.loop.run_until_complete(main())
+    guest_client.start()
+    guest_client.loop.create_task(clean_sessions_loop())
+    guest_client.loop.run_until_complete(main())
