@@ -59,6 +59,18 @@ wattext = """<h3>Что за дичь?</h3><br>
 https://github.com/xadjilut/microclient</a></p>
 <br>murix, 2020-2022
 """
+faqtext = f"""<h3>Это безопасно?</h3><br>
+<img src='http://murix.ru/0/2Q.gif'/></br><br>Вполне, но только в случае самостоятельной установки данного 
+приложения на домашнем ПК, удалённом сервере, либо используя для установки услуги проверенных хостинг-провайдеров. 
+Никто не гарантирует сохранность твоего аккаунта, если ты заюзаешь микроклиент, установленный на 
+незнакомом тебе сайте.</br><h2>Впрочем...</h2><br>Испытать удачу и авторизоваться в тапкофоне, используя 
+фейковый аккаунт, ты можешь на официальном сайте: <code>murix.ru/armyrf</code>.</br><h1>Как установить?</h1><br>
+Самый простой способ - это накатить на Heroku (требуется регистрация): 
+<a href='https://heroku.com/deploy?template=https://github.com/xadjilut/microclient'>
+<img src='https://www.herokucdn.com/deploy/button.png'/></a></br><br>Более подробный мануал в 
+<a href='https://github.com/xadjilut/microclient'>официальном репо</a>.</br>
+<br><i>(будет дополняться)</i></br><p><a href='{t}'>понятно</a> <a href='{t}/wat'>непонятно</a></p>
+"""
 tgevents = '<h1>777000</h1>Telegram Events'
 passform = "<form action='%' method='post'><input type='password' name='password' /><input type='submit' value='ок' " \
            "/></form> "

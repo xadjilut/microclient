@@ -111,11 +111,6 @@ async def auth():
                     await client.send_code_request(phone)
                     current['client'] = client
                     current['stage'] = 'code' + phone
-                elif check_bot_token(phone):
-                    client = TelegramClient(SQLiteSession(), api_id, api_hash)
-                    await client.start(bot_token=phone)
-                    current['client'] = client
-                    current['stage'] = 'pass'
                 else:
                     raise Exception("invalid number or bot token")
             elif code and current['stage'][:4] == 'code':
@@ -147,7 +142,7 @@ async def auth():
             error = f'<i><b>Произошла ошиб очка: {e}</b></i>'
     text = "<img src='http://murix.ru/0/2Q.gif'/>"
     if 'stage' not in current or current.get('stage') == 'phone':
-        text += "<h3>Введи номер...</h3>" + authform.format(
+        text += f"<h3>Введи номер...</h3><a href='{t}/faq'>(?)</a>" + authform.format(
             type='text', name='phone', button='»'
         ) + f' {error}<br>Либо используй <a href="{t}/auth?mode=guest">гостевой аккаунт</a>'
         if 'stage' not in current:

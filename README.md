@@ -38,6 +38,7 @@ This full client web-app allow to receive text messages, images, stickers and vo
   <li>/armyrf/auth</li>
   <li>/armyrf/dl</li>
   <li>/armyrf/dl/&lt;filename&gt;</li>
+  <li>/armyrf/faq</li>
   <li>/armyrf/logout</li>
   <li>/armyrf/pass</li>
   <li>/armyrf/profile</li>

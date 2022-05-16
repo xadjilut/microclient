@@ -25,7 +25,8 @@ from helper import put_message_head, put_content, saltkey, hello_everybot, aeske
     xid2id, unpack_xid
 from ipworker import IpWorker
 from micrologging import log
-from values import my_tz, app, temp, t, config, fileform, form, dlpath, authform, current_sessions, tgevents, wattext
+from values import my_tz, app, temp, t, config, fileform, form, dlpath, current_sessions, tgevents, wattext, \
+    faqtext
 
 
 @app.route('/')
@@ -41,15 +42,6 @@ async def hello():
     client: TelegramClient = g.__getattr__(session['client_id'])
     me = await client.get_me()
     text = f'<p><a href="{t}/profile">{get_title_or_name(me)}</a></p>'
-
-    if await client.is_bot():
-        text += '<h3>Найди чат</h3><br>'
-        text += authform.format(
-            type='text', name='search', hint='@username или ID...', button='ок'
-        )
-        text += f'<br><a href="{t}/wat">шта?</a>'
-        return temp.replace('%', text)
-
     offset = request.args.get("offset", '0')
     if offset.isnumeric():
         offset = int(offset)
@@ -101,6 +93,11 @@ async def profile():
 @app.route(f'{t}/wat')
 def wat():
     return temp.replace('%', wattext)
+
+
+@app.route(f'{t}/faq')
+def faq():
+    return temp.replace('%', faqtext)
 
 
 @app.route(f'{t}/<int:xid>', methods=['GET', 'POST'])
@@ -315,12 +312,6 @@ def user_agent():
 @app.route('/time')
 def curtime():
     return temp.replace('%', datetime.datetime.now(my_tz).strftime('%H:%M:%S<br>%Y-%h-%d'))
-
-
-# @app.errorhandler(404)
-# async def not_found(e):
-#     logging.info(f"404 - {e}")
-#     return temp.replace('%', "<h1>404</h1>Page not found")
 
 
 async def main():
