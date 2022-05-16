@@ -4,7 +4,6 @@ import base64
 import datetime
 import io
 import logging
-import re
 import time
 from asyncio import sleep
 from html import escape
@@ -344,6 +343,5 @@ async def clean_sessions_loop():
 
 if __name__ == '__main__':
     print(f"microclient is started\n\nAeskey for debug (base64): {base64.b64encode(aeskey).decode()}\n")
-    guest_client.start()
     guest_client.loop.create_task(clean_sessions_loop())
     guest_client.loop.run_until_complete(main())

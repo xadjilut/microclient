@@ -1,0 +1,36 @@
+{
+  "name": "microclient /ArmyRF",
+  "description": "Microclient 4 all devices, e.g. push-button phones",
+  "keywords": [
+    "microclient",
+    "telegram",
+    "python"
+  ],
+  "website": "https://murix.ru/armyrf",
+  "repository": "https://github.com/xadjilut/microclient",
+  "logo": "http://murix.ru/0/2Q.gif",
+  "success_url": "/armyrf",
+  "env": {
+    "SECRET_KEY": {
+      "description": "A secret key for cookie's encryption.",
+      "generator": "secret"
+    },
+    "API_ID": {
+      "description": "An optional Telegram app identifier from my.telegram.org",
+      "value": ""
+    },
+    "API_HASH": {
+      "description": "An optional Telegram app hash from my.telegram.org",
+      "value": ""
+    },
+    "GUEST_AUTH_KEY": {
+      "description": "An optional Telethon authorization key for guest account session",
+      "value": ""
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "https://github.com/jonathanong/heroku-buildpack-ffmpeg-latest.git"
+    }
+  ]
+}

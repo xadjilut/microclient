@@ -20,7 +20,11 @@ rate_limiter = RateLimiter(app)
 
 if not os.path.exists("secret_key.txt"):
     with open("secret_key.txt", 'wb') as f:
-        f.write(secrets.token_bytes(16))
+        secret_key_env = os.environ.get("SECRET_KEY")
+        if secret_key_env:
+            f.write(int.to_bytes(int('0x'+secret_key_env[:32], 16), 16, 'big'))
+        else:
+            f.write(secrets.token_bytes(16))
 with open("secret_key.txt", 'rb') as f:
     secret_key = f.read()
     app.secret_key = secret_key

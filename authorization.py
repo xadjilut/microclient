@@ -1,19 +1,33 @@
 import datetime
 import logging
+import os.path
 from functools import wraps
 from time import time
 
 from quart import redirect, request, url_for, Response, session, g
 from quart_rate_limiter import rate_limit
 from telethon import TelegramClient, errors
-from telethon.sessions import SQLiteSession
+from telethon.sessions import SQLiteSession, StringSession
 
 from helper import api_id, api_hash, check_cookies, decrypt_session_string, aeskey, new_cookies, check_phone, \
     check_bot_token, encrypt_session_string, get_client_ip
 from micrologging import log
 from values import secret_key, current_sessions, temp, authform, t, passform, app
 
-guest_client = TelegramClient('session', api_id, api_hash)
+if os.path.exists("session.session"):
+    guest_client = TelegramClient('session', api_id, api_hash)
+    guest_client.start()
+else:
+    try:
+        guest_auth_key = os.environ.get("GUEST_AUTH_KEY")
+        if guest_auth_key:
+            guest_client = TelegramClient(StringSession(guest_auth_key), api_id, api_hash)
+        else:
+            guest_client = TelegramClient(StringSession(), api_id, api_hash)
+            raise Exception()
+        guest_client.start()
+    except:
+        print("Guest account session is not set\n")
 
 
 def auth_required(func):
@@ -21,7 +35,7 @@ def auth_required(func):
     async def wrapper(*args, **kwargs):
         logging.info(f"{get_client_ip(request.headers)} - {func.__name__}: {args}, {kwargs}")
         _sess_id = request.cookies.get("_sess_id")
-        if request.cookies.get('_guest', '1') == '1':
+        if request.cookies.get('_guest', '1') == '1' and guest_client.session.auth_key:
             g.__setattr__(f"client{_sess_id}", guest_client)
             session[f"client_id"] = f"client{_sess_id}"
             return await func(*args, **kwargs)
@@ -98,7 +112,7 @@ async def auth():
                     current['client'] = client
                     current['stage'] = 'code' + phone
                 elif check_bot_token(phone):
-                    client = TelegramClient(SQLiteSession(), api_id, api_hash, connection_retries=0)
+                    client = TelegramClient(SQLiteSession(), api_id, api_hash)
                     await client.start(bot_token=phone)
                     current['client'] = client
                     current['stage'] = 'pass'
