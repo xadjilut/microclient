@@ -8,7 +8,6 @@
   ],
   "website": "https://murix.ru/armyrf",
   "repository": "https://github.com/xadjilut/microclient",
-  "logo": "http://murix.ru/0/2Q.gif",
   "success_url": "/armyrf",
   "env": {
     "SECRET_KEY": {
