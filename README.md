@@ -14,7 +14,9 @@ This full client web-app allow to receive text messages, images, stickers and vo
 
 <h2>Installation</h2>
 <h3>Heroku:</h3>
-[![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy)
+<a href="https://heroku.com/deploy">
+  <img src="https://www.herokucdn.com/deploy/button.svg" alt="Deploy">
+</a>
 <h3>Manual:</h3>
 <code>python3 -m pip install --user -r requirements.txt</code>
 
