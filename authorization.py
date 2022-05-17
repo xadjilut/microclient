@@ -237,7 +237,6 @@ async def password():
 
 @app.route(f'{t}/logout')
 @rate_limit(3, datetime.timedelta(seconds=3))
-# @auth_required
 async def logout():
     _sess = request.cookies.get('_sess')
     if _sess in current_sessions:
@@ -249,6 +248,7 @@ async def logout():
     resp = Response(temp.replace('%', 'ок, перебрасываю в авторизацию...'))
     resp.set_cookie("varstr", '', 1)
     resp.set_cookie("conststr", '', 1)
+    resp.set_cookie("_const_id", '13371488', 1)
     resp.set_cookie("_guest", '0', 60 * 60 * 24 * 90)
     resp.headers['Location'] = url_for("auth")
     return resp, 302

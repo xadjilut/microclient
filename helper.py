@@ -76,18 +76,18 @@ async def decrypt_session_string(cookies_str: str, key1: bytes, key2: bytes,
     if not cookies_str:
         raise Exception("cookies string is empty")
     current = current_sessions.get(_sess)
-    if current and 'client' in current:
+    if current and 'client' in current and not _const_id:
         client = current['client']
     else:
         session_string_b64 = cookies_str.encode()
         session_string_cipher = base64.urlsafe_b64decode(session_string_b64)
         if _const_id:
             session_string_lenten = b''
-            for i in range(len(session_string_cipher) // 8 + 1):
+            for i in range(len(session_string_cipher) // 8):
                 session_string_lenten += int.to_bytes(
                     int.from_bytes(session_string_cipher[i * 8:(i + 1) * 8], 'big') ^ _const_id, 8, 'big'
                 )
-            session_string_cipher = session_string_lenten
+            session_string_cipher = session_string_lenten[:353]
         key = md5(key1).digest() + key2
         crypt = pyaes.AESModeOfOperationCTR(key)
         session_string_encoded = crypt.decrypt(session_string_cipher)
@@ -114,9 +114,10 @@ def encrypt_session_string(client: TelegramClient, key1: bytes, key2: bytes, is_
     crypt = pyaes.AESModeOfOperationCTR(key)
     session_string_cipher = crypt.encrypt(session_string.encode())
     if is_const:
+        session_string_cipher += b'\x00' * 7
         magic = int.from_bytes(session_string_cipher[:8], 'big') ^ 15279119701704967917
         session_string_salted = b''
-        for i in range(len(session_string_cipher) // 8 + 1):
+        for i in range(len(session_string_cipher) // 8):
             session_string_salted += int.to_bytes(
                 int.from_bytes(session_string_cipher[i * 8:(i + 1) * 8], 'big') ^ magic, 8, 'big'
             )
