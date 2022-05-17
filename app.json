@@ -16,15 +16,18 @@
     },
     "API_ID": {
       "description": "An optional Telegram app identifier from my.telegram.org",
-      "value": ""
+      "value": "",
+      "required": false
     },
     "API_HASH": {
       "description": "An optional Telegram app hash from my.telegram.org",
-      "value": ""
+      "value": "",
+      "required": false
     },
     "GUEST_AUTH_KEY": {
       "description": "An optional Telethon authorization key for guest account session",
-      "value": ""
+      "value": "",
+      "required": false
     }
   },
   "buildpacks": [
