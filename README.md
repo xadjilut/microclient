@@ -1,5 +1,5 @@
 # microclient /ArmyRF :ru:
-<img src="https://github.com/xadjilut/microclient/blob/main/microclient_logo.jpg?raw=true" width="50%" height="30%"/>
+<img src="https://github.com/xadjilut/microclient/blob/master/microclient_logo.jpg?raw=true" width="50%" height="30%"/>
 <br>
 Unofficial Telegram client for all devices, e.g. push-button phones.
 <br>
