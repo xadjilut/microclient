@@ -1,39 +1,22 @@
 import datetime
 import logging
-import os.path
 from functools import wraps
 from time import time
 
 from quart import redirect, request, url_for, Response, session, g
 from quart_rate_limiter import rate_limit
 from telethon import TelegramClient, errors
-from telethon.sessions import SQLiteSession, StringSession
+from telethon.sessions import SQLiteSession
 
 from helper import api_id, api_hash, check_cookies, decrypt_session_string, aeskey, new_cookies, check_phone, \
-    check_bot_token, encrypt_session_string, get_client_ip
-from micrologging import log
-from values import secret_key, current_sessions, temp, authform, t, passform, app
-
-if os.path.exists("session.session"):
-    guest_client = TelegramClient('session', api_id, api_hash)
-    guest_client.start()
-else:
-    try:
-        guest_auth_key = os.environ.get("GUEST_AUTH_KEY")
-        if guest_auth_key:
-            guest_client = TelegramClient(StringSession(guest_auth_key), api_id, api_hash)
-        else:
-            guest_client = TelegramClient(StringSession(), api_id, api_hash)
-            raise Exception()
-        guest_client.start()
-    except:
-        print("Guest account session is not set\n")
+    encrypt_session_string, get_client_ip, guest_client
+from values import secret_key, current_sessions, temp, authform, t, passform
 
 
 def auth_required(func):
     @wraps(func)
     async def wrapper(*args, **kwargs):
-        logging.info(f"{get_client_ip(request.headers)} - {func.__name__}: {args}, {kwargs}")
+        logging.info(f"{get_client_ip(request.headers, force_print=True)} - {func.__name__}: {args}, {kwargs}")
         _sess_id = request.cookies.get("_sess_id")
         if request.cookies.get('_guest', '1') == '1' and guest_client.session.auth_key:
             g.__setattr__(f"client{_sess_id}", guest_client)
@@ -57,7 +40,7 @@ def auth_required(func):
                     return redirect(url_for("password"))
                 raise Exception("not norm cookies and nullable conststr")
         except Exception as e:
-            log(f"auth_required: {e}")
+            logging.warning(e)
             if request.cookies.get("conststr"):
                 return redirect(url_for("password"))
             return redirect(url_for('auth'))
@@ -66,7 +49,6 @@ def auth_required(func):
     return wrapper
 
 
-@app.route(f"{t}/auth", methods=['GET', 'POST'])
 @rate_limit(3, datetime.timedelta(seconds=3))
 @rate_limit(20, datetime.timedelta(minutes=5))
 async def auth():
@@ -124,21 +106,21 @@ async def auth():
                 current['client'] = client
                 current['stage'] = 'pass'
         except errors.PhoneCodeExpiredError as e:
-            log(f'auth: {e}')
+            logging.info(e)
             error = '<i><b>Код истёк, начни авторизацию заново</b></i>'
         except errors.PhoneCodeInvalidError as e:
-            log(f'auth: {e}')
+            logging.info(e)
             error = '<i><b>Неверный код, пробуй ещё...</b></i>'
         except errors.SessionPasswordNeededError:  # requires 2fa password
             current['stage'] = '2fa' + current['stage'][4:]
         except errors.PasswordHashInvalidError as e:
-            log(f'auth: {e}')
+            logging.info(e)
             error = '<i><b>Неверный пароль 2fa, попробуй снова...</b></i>'
         except errors.FloodWaitError as e:
-            log(f'auth: {e}')
+            logging.info(e)
             error = f'<i><b>Ага, довыёбывался, теперь жди {e.seconds} сек.</b></i>'
         except Exception as e:
-            log(f"auth: {e}")
+            logging.info(e)
             error = f'<i><b>Произошла ошиб очка: {e}</b></i>'
     text = "<img src='http://murix.ru/0/2Q.gif'/>"
     if 'stage' not in current or current.get('stage') == 'phone':
@@ -177,7 +159,6 @@ async def auth():
     return resp
 
 
-@app.route(f"{t}/pass", methods=['GET', 'POST'])
 @rate_limit(3, datetime.timedelta(seconds=3))
 @rate_limit(7, datetime.timedelta(minutes=1))
 async def password():
@@ -228,14 +209,13 @@ async def password():
                 resp.headers['Location'] = url_for("hello")
                 return resp, 302
             except Exception as e:
-                log(f"password: {e}")
+                logging.info(e)
                 error += '<b><i>Неверный пароль, попробуй снова либо выйди и авторизуйся заново</i></b>'
     return temp.replace(
         '%', f'<h3>Введи пароль</h3><br>{passform.replace("%", "")} {error}<br><a href="{t}/logout">выйти</a>'
     )
 
 
-@app.route(f'{t}/logout')
 @rate_limit(3, datetime.timedelta(seconds=3))
 async def logout():
     _sess = request.cookies.get('_sess')

@@ -1,22 +1,11 @@
 import os.path
 import secrets
-from datetime import timedelta
 from os.path import realpath, exists
 
 import pytz as pytz
 from hypercorn import Config
-from quart import Quart
-from quart_rate_limiter import RateLimiter
 
 config = Config()
-config.bind = ["0.0.0.0:8090"]
-
-app = Quart(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 200 * 1024
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
-app.url_map.strict_slashes = False
-
-rate_limiter = RateLimiter(app)
 
 if not os.path.exists("secret_key.txt"):
     with open("secret_key.txt", 'wb') as f:
@@ -27,7 +16,6 @@ if not os.path.exists("secret_key.txt"):
             f.write(secrets.token_bytes(16))
 with open("secret_key.txt", 'rb') as f:
     secret_key = f.read()
-    app.secret_key = secret_key
 
 # put your timezone
 my_tz = pytz.timezone('Europe/Moscow')

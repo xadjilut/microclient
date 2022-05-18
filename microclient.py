@@ -1,5 +1,5 @@
 # by XADJILUT, 2020-2022
-
+import asyncio
 import base64
 import datetime
 import io
@@ -14,19 +14,27 @@ import hypercorn.asyncio
 import pyaes
 from boilerpy3.extractors import KeepEverythingExtractor as CanolaExtractor
 from pydub import AudioSegment
-from quart import request, redirect, url_for, send_file, session, g
-from quart_rate_limiter import rate_limit
+from quart import request, redirect, url_for, send_file, session, g, Quart
+from quart_rate_limiter import rate_limit, RateLimiter
 from telethon import TelegramClient
 from telethon.tl.types import User, MessageMediaDocument, Document, DocumentAttributeAudio, DocumentAttributeFilename
 from werkzeug.utils import secure_filename
 
-from authorization import auth_required, guest_client
+from authorization import auth_required, auth, password, logout
 from helper import put_message_head, put_content, saltkey, hello_everybot, aeskey, get_title_or_name, pack_xid, \
-    xid2id, unpack_xid
+    xid2id, unpack_xid, guest_client
 from ipworker import IpWorker
-from micrologging import log
-from values import my_tz, app, temp, t, config, fileform, form, dlpath, current_sessions, tgevents, wattext, \
-    faqtext
+from micrologging import microlog
+from values import my_tz, temp, t, config, fileform, form, dlpath, current_sessions, tgevents, wattext, \
+    faqtext, secret_key
+
+app = Quart(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 200 * 1024
+app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=1)
+app.url_map.strict_slashes = False
+app.secret_key = secret_key
+
+rate_limiter = RateLimiter(app)
 
 
 @app.route('/')
@@ -120,7 +128,7 @@ async def dialog(xid):
     try:
         entity = await client.get_entity(peer)
     except Exception as e:
-        log(f"peer not found - {e}")
+        logging.info(f"peer not found - {e}")
         return temp.replace('%', "<h1>404</h1>Peer not found")
     try:
         if request.method == 'POST':
@@ -180,7 +188,7 @@ async def dl():
         try:
             media = eval(_mediastr)
         except Exception as e:
-            log(f'dl: {e}')
+            logging.info(e)
             i += 1
             continue
         mediastr = _mediastr
@@ -223,9 +231,9 @@ async def reply():
             try:
                 segment = AudioSegment.from_file(voice)
             except Exception as e:
-                log(f"reply: {e}")
+                logging.info(e)
                 return temp.replace('%', '<h3>Это не медиа!</h3><p>Чё ахуели там?..</p>')
-        log(str(voice))
+        logging.info(str(voice))
         if voice and voice.filename:
             path = f'static/upload/{secure_filename(voice.filename)}'
             segment.export(f"{path}", "ogg", bitrate="48k", codec="libopus")
@@ -332,7 +340,20 @@ async def clean_sessions_loop():
             logging.info(f"complete sessions cleaning, {i} sessions are removed")
 
 
+app.add_url_rule(f"{t}/auth", view_func=auth, methods=['GET', 'POST'])
+app.add_url_rule(f"{t}/pass", view_func=password, methods=['GET', 'POST'])
+app.add_url_rule(f'{t}/logout', view_func=logout)
+app.add_url_rule('/microlog/<string:secret_part>', view_func=microlog)
+
+print(f"microclient is started\n")
+print(f"Aeskey for debug (base64): {base64.b64encode(aeskey).decode()}")
+print(f"Secret key (base64): {base64.b64encode(secret_key).decode()}\n")
+
 if __name__ == '__main__':
-    print(f"microclient is started\n\nAeskey for debug (base64): {base64.b64encode(aeskey).decode()}\n")
     guest_client.loop.create_task(clean_sessions_loop())
     guest_client.loop.run_until_complete(main())
+else:
+    loop = guest_client.loop
+    asyncio.set_event_loop(loop)
+    loop.create_task(clean_sessions_loop())
+    loop.run_until_complete(main())
