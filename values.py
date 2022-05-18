@@ -1,6 +1,6 @@
 import os.path
 import secrets
-from os.path import realpath, exists
+from os.path import normpath, exists
 
 import pytz as pytz
 from hypercorn import Config
@@ -26,9 +26,12 @@ cidrs = {}
 
 n = '\n'
 t = '/armyrf'
-dlpath = realpath('static/dl/')
-if not exists(dlpath):
-    os.mkdir(dlpath,)
+dlpath = 'static/dl/'
+if not exists(normpath(dlpath)):
+    os.makedirs(normpath(dlpath), exist_ok=True)
+uploadpath = 'static/upload/'
+if not exists(normpath(uploadpath)):
+    os.makedirs(normpath(uploadpath), exist_ok=True)
 meta = '<meta property="og:title" content="телега для тапика"><meta property="og:site_name" content="/ArmyRF"><meta ' \
        'property="og:description" content="Микроклиент для всех. Вопросы и предложения -> @armyrfchat"><meta ' \
        'property="og:image" content="https://murix.ru/0/h8.jpg"><meta property="og:image:width" content="240"><meta ' \

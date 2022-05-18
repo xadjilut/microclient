@@ -7,7 +7,7 @@ import logging
 import time
 from asyncio import sleep
 from html import escape
-from os.path import exists
+from os.path import exists, normpath
 from urllib.request import urlopen, Request
 
 import hypercorn.asyncio
@@ -26,7 +26,7 @@ from helper import put_message_head, put_content, saltkey, hello_everybot, aeske
 from ipworker import IpWorker
 from micrologging import microlog
 from values import my_tz, temp, t, config, fileform, form, dlpath, current_sessions, tgevents, wattext, \
-    faqtext, secret_key
+    faqtext, secret_key, uploadpath
 
 app = Quart(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 200 * 1024
@@ -195,7 +195,7 @@ async def dl():
         break
     media.document.file_reference = base64.b64decode((await request.form).get('fileref').encode('UTF-8'))
     file = f'{media.document.dc_id}_{media.document.id}'
-    if exists(dlpath + file + '.mp3'):
+    if exists(normpath(dlpath + file + '.mp3')):
         return temp.replace('%', f'<a href="{t}/dl/{file}.mp3">{file}.mp3</a><p>{mediastr}')
     client: TelegramClient = g.__getattr__(session['client_id'])
     input = await client.download_media(media, bytes)
@@ -203,15 +203,15 @@ async def dl():
     input = io.BytesIO(input)
     input.seek(0)
     segment = AudioSegment.from_file(input)
-    segment.export(f"{dlpath}{file}.mp3", "mp3", bitrate="128k", codec="libmp3lame")
-    if exists(dlpath + file + '.mp3'):
+    segment.export(f"{normpath(dlpath+file)}.mp3", "mp3", bitrate="128k", codec="libmp3lame")
+    if exists(normpath(dlpath + file + '.mp3')):
         return temp.replace('%', f'<a href="{t}/dl/{file}.mp3">{file}.mp3</a><p>{mediastr}')
     return temp.replace('%', str(media.document.file_reference))
 
 
 @app.route(f'{t}/dl/<path:filename>', methods=['GET', 'POST'])
 async def dl_path(filename):
-    return await send_file(dlpath + secure_filename(filename), attachment_filename=filename)
+    return await send_file(normpath(dlpath + secure_filename(filename)), attachment_filename=filename)
 
 
 @app.route(f'{t}/reply', methods=['GET', 'POST'])
@@ -235,8 +235,8 @@ async def reply():
                 return temp.replace('%', '<h3>Это не медиа!</h3><p>Чё ахуели там?..</p>')
         logging.info(str(voice))
         if voice and voice.filename:
-            path = f'static/upload/{secure_filename(voice.filename)}'
-            segment.export(f"{path}", "ogg", bitrate="48k", codec="libopus")
+            path = normpath(uploadpath + secure_filename(voice.filename) + '.ogg')
+            segment.export(path, "ogg", bitrate="48k", codec="libopus")
             if exists(path):
                 await client.send_file(
                     peer, path, voice_note=True,
