@@ -1,1 +1,1 @@
-web: python3 microclient.py
+web: hypercorn -b 0.0.0.0:$PORT microclient:app
