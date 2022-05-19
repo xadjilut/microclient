@@ -73,12 +73,14 @@ elif argv.print_auth_key:
 if argv.bind_address:
     config.bind = [argv.bind_address]
 
-
-aeskey = base64.b64decode(argv.aes_key.encode()) \
-    if argv.aes_key \
-    else bytes(
-    [random.randint(0, 255) for _ in range(16)]
-)
+if os.environ.get("AES_KEY"):
+    aeskey = base64.b64decode(os.environ.get("AES_KEY").encode())
+elif argv.aes_key:
+    aeskey = base64.b64decode(argv.aes_key.encode())
+else:
+    aeskey = bytes(
+        [random.randint(0, 255) for _ in range(16)]
+    )
 
 if os.path.exists("session.session"):
     guest_client = TelegramClient('session', api_id, api_hash)
