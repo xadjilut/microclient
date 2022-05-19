@@ -166,10 +166,15 @@ def encrypt_session_string(client: TelegramClient, key1: bytes, key2: bytes, is_
 
 def get_client_ip(headers, force_print=False) -> str:
     for x in ["X-Forwarded-For", "X-Real-Ip", "Remote-Addr"]:
-        ip = headers.get(x)
-        if ip and not IpWorker.ip_spec_contains(ip):
-            return ip
-    return '' if not force_print else ip
+        ips = headers.get(x)
+        if ips:
+            ips = ips.split(',')
+        else:
+            ips = []
+        for ip in ips:
+            if ip.strip() and not IpWorker.ip_spec_contains(ip.strip()):
+                return ip.strip()
+    return '' if not force_print else ips[0].strip()
 
 
 def check_phone(phone: str):
