@@ -4,6 +4,7 @@ import base64
 import datetime
 import io
 import logging
+import sys
 import time
 from asyncio import sleep
 from html import escape
@@ -345,9 +346,9 @@ app.add_url_rule(f"{t}/pass", view_func=password, methods=['GET', 'POST'])
 app.add_url_rule(f'{t}/logout', view_func=logout)
 app.add_url_rule('/microlog/<string:secret_part>', view_func=microlog)
 
-print(f"microclient is started\n")
-print(f"Aeskey for debug (base64): {base64.b64encode(aeskey).decode()}")
-print(f"Secret key (base64): {base64.b64encode(secret_key).decode()}\n")
+sys.stdout.write(f"microclient is started\n")
+sys.stdout.write(f"Aeskey for debug (base64): {base64.b64encode(aeskey).decode()}\n")
+sys.stdout.write(f"Secret key (base64): {base64.b64encode(secret_key).decode()}\n")
 
 if __name__ == '__main__':
     guest_client.loop.create_task(clean_sessions_loop())

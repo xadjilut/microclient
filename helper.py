@@ -3,6 +3,7 @@ import base64
 import logging
 import os
 import random
+import sys
 from hashlib import md5
 from html import escape
 from os.path import exists
@@ -59,14 +60,14 @@ if argv.setup_guest:
         with sync.TelegramClient(
                 "session" if not argv.print_auth_key else StringSession(), api_id, api_hash) as _client:
             if argv.print_auth_key:
-                print(f"Guest auth key: {_client.session.save()}")
+                sys.stdout.write(f"Guest auth key: {_client.session.save()}\n")
     except:
-        print("\nOKAY")
+        sys.stdout.write("\nOKAY")
         exit(1)
-    print("Guest account session created successfully!")
+    sys.stdout.write("Guest account session created successfully!\n")
     exit(0)
 elif argv.print_auth_key:
-    print("Run with --setup-guest")
+    sys.stdout.write("Run with --setup-guest\n")
     exit(0)
 
 if argv.bind_address:
@@ -92,7 +93,7 @@ else:
             raise Exception()
         guest_client.start()
     except:
-        print("Guest account session is not set\n")
+        sys.stdout.write("Guest account session is not set\n")
 
 
 def check_cookies(cookies_hash: str, ip: str, user_agent: str, sess_id: int):

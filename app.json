@@ -7,6 +7,7 @@
     "python"
   ],
   "website": "https://murix.ru/armyrf",
+  "logo": "https://murix.ru/0/2u.png",
   "repository": "https://github.com/xadjilut/microclient",
   "success_url": "/armyrf",
   "env": {
@@ -26,6 +27,11 @@
     },
     "GUEST_AUTH_KEY": {
       "description": "An optional Telethon authorization key for guest account session",
+      "value": "",
+      "required": false
+    },
+    "AES_KEY": {
+      "description": "An optional AES key for debug (DON'T PUT UNNECESSARILLY)",
       "value": "",
       "required": false
     }
