@@ -16,7 +16,8 @@ from quart import request, g, session
 from telethon import TelegramClient, sync
 from telethon.sessions import StringSession
 from telethon.tl.types import User, MessageMediaPhoto, MessageMediaDocument, MessageEntityUrl, MessageEntityTextUrl, \
-    Message, TypeInputPeer, InputPeerUser, InputPeerChat, InputPeerChannel
+    Message, TypeInputPeer, InputPeerUser, InputPeerChat, InputPeerChannel, MessageEntityMentionName, \
+    MessageEntityMention
 
 from ipworker import IpWorker
 from values import t, n, temp, current_sessions, my_tz, config
@@ -93,6 +94,7 @@ else:
         else:
             guest_client = TelegramClient(StringSession(), api_id, api_hash)
             raise Exception()
+        guest_client.parse_mode = "HTML"
         guest_client.start()
     except:
         sys.stdout.write("Guest account session is not set\n")
@@ -129,6 +131,7 @@ async def decrypt_session_string(cookies_str: str, key1: bytes, key2: bytes,
         session_string_encoded = crypt.decrypt(session_string_cipher)
         session_string = session_string_encoded.decode()
         client = TelegramClient(StringSession(session_string), api_id, api_hash)
+        client.parse_mode = "HTML"
         await client.start()
         current_sessions[_sess] = {"client": client, "expires_in": int(time()) + 60 * 60 * 3}
     client_id = f"client{_sess_id}"
@@ -258,12 +261,12 @@ async def put_message_head(x, xid):
             restext = f'<br><i>{escape(y.raw_text[:10])}</i>'
         else:
             restext = f'<br>NotTextMessage'
-        res += f'<a href="{t}/{xid}?message_id={y.id}"><p><i>»{resname}</i>{restext}</p></a>'
+        res += f'<a href="{t}/{xid}?message_id={y.id}"><i>»{resname}</i>{restext}</p></a>'
     return res
 
 
 # message's content generator
-async def put_content(x: Message, client, limited=None):
+async def put_content(x: Message, client: TelegramClient, limited=None):
     res = ''
     if x.media.__class__ == MessageMediaPhoto:
         mediatype = x.media.photo
@@ -306,30 +309,35 @@ async def put_content(x: Message, client, limited=None):
                    f'<input type="hidden" name="fileref" value="{fileref}" /><input type="submit" value="# ili.!.i|l ' \
                    f'{x.media.document.attributes[0].duration}s" /></form>'
     if x.message:
-        raw = (x.raw_text[:100] + '...' if limited and x.fwd_from else x.raw_text)
-        if x.entities is None:
-            entities = []
+        if limited and x.fwd_from:
+            raw = x.raw_text[:100] + '...'
         else:
-            entities = x.entities
-        rawlist = [(escape(raw) if not entities else escape(raw[:entities[0].offset]))]
-        lenent = len(entities)
-        for y in range(lenent):
-            o = entities[y].offset
-            l = entities[y].length
-            url = None
-            if entities[y].__class__ == MessageEntityUrl:
-                url = raw[o:o + l]
-            elif entities[y].__class__ == MessageEntityTextUrl:
-                url = entities[y].url
-            if url is not None:
-                rawlist.append(f'<a href="/p?u={url}">{escape(raw[o:o + l])}</a>')
-            else:
-                rawlist.append(escape(raw[o:o + l]))
-            if y + 1 != lenent:
-                rawlist.append(escape(raw[o + l:entities[y + 1].offset]))
-            else:
-                rawlist.append(escape(raw[o + l:]))
-        res += ''.join(rawlist).replace(n, '<p>')
+            ent = []
+            for y in x.entities or []:
+                url = ''
+                pattern = '/p?u='
+                if isinstance(y, MessageEntityUrl):
+                    url = x.get_entities_text(MessageEntityUrl)[0][1]
+                    if not url.startswith("http://") and not url.startswith("https://"):
+                        url += 'http://' + url
+                    url = pattern + url
+                elif isinstance(y, MessageEntityTextUrl):
+                    url = pattern + y.url
+                elif isinstance(y, MessageEntityMention):
+                    url = pattern + "https://t.me/" + x.get_entities_text(MessageEntityMention)[0][1][1:]
+                elif isinstance(y, MessageEntityMentionName):
+                    try:
+                        user = await client.get_entity(y.user_id)
+                        xid = pack_xid(user.id, user.access_hash, True)
+                    except Exception as e:
+                        logging.warning(f"wrong entity for mention {y.user_id} - {e}")
+                        xid = y.user_id
+                    url = f"{t}/{xid}"
+                if url:
+                    ent.append(MessageEntityTextUrl(y.offset, y.length, url))
+            x.entities = ent
+            raw = x.text
+        res += "<p>" + "<br>".join(raw.split(n)) + "</p>"
     return res
 
 

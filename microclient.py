@@ -165,7 +165,7 @@ async def dialog(xid):
     for x in resp:
         tmptext = f'''<br><div id="{x.id}">
 {await put_message_head(x, xid)}
-{await put_content(x, client, True)}<br>
+{await put_content(x, client, True)}
 <a href="{t}/reply?xid={xid}&message_id={x.id}">отв.</a> 
 <a href="{t}/reply?xid={xid}">чат.</a>
 </div>'''
