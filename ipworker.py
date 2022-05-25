@@ -1,3 +1,4 @@
+import ipwhois
 import re
 
 
@@ -126,4 +127,9 @@ class IpWorker:
         if cast < cidr_range[0] or cast > cidr_range[1]:
             sub -= 1
         return f"{gate_ip}/{sub}"
-        
+
+    @staticmethod
+    def get_asn_cidr_by_ip(source_ip: str):
+        if not IpWorker.is_ip(source_ip):
+            raise Exception("Wrong ipv4 format")
+        return ipwhois.IPWhois(source_ip).lookup_rdap().get("asn_cidr", source_ip + "/32")

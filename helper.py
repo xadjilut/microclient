@@ -20,7 +20,7 @@ from telethon.tl.types import User, MessageMediaPhoto, MessageMediaDocument, Mes
     MessageEntityMention
 
 from ipworker import IpWorker
-from values import t, n, temp, current_sessions, my_tz, config
+from values import t, n, temp, current_sessions, my_tz, config, cidrs
 
 
 class ArgV:
@@ -176,7 +176,18 @@ def get_client_ip(headers, force_print=False) -> str:
             ips = []
         for ip in ips:
             if ip.strip() and not IpWorker.ip_spec_contains(ip.strip()):
-                return ip.strip()
+                ipnum = IpWorker.ip2num(ip.strip())
+                for k, v in cidrs.items():
+                    if v[0] <= ipnum <= v[1]:
+                        return k
+                try:
+                    cidr = IpWorker.get_asn_cidr_by_ip(ip.strip())
+                except Exception as e:
+                    logging.warning(f"cidr for {ip.strip()} not found, okay - {e}")
+                    cidr = ip.strip() + '/32'
+                cidrs[cidr] = IpWorker.cidr_ip2num(cidr)
+                logging.info(f"{cidr} - add to cidrs dict")
+                return cidr
     return '' if not force_print else ips[0].strip()
 
 
@@ -319,7 +330,7 @@ async def put_content(x: Message, client: TelegramClient, limited=None):
                 if isinstance(y, MessageEntityUrl):
                     url = x.get_entities_text(MessageEntityUrl)[0][1]
                     if not url.startswith("http://") and not url.startswith("https://"):
-                        url += 'http://' + url
+                        url = 'http://' + url
                     url = pattern + url
                 elif isinstance(y, MessageEntityTextUrl):
                     url = pattern + y.url
