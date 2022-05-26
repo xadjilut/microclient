@@ -114,7 +114,7 @@ async def decrypt_session_string(cookies_str: str, key1: bytes, key2: bytes,
     if not cookies_str:
         raise Exception("cookies string is empty")
     current = current_sessions.get(_sess)
-    if current and 'client' in current and not _const_id:
+    if current and 'client' in current and current.get('stage') != 'pass' and not _const_id:
         client = current['client']
     else:
         session_string_b64 = cookies_str.encode()
