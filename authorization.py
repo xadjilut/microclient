@@ -151,6 +151,7 @@ async def auth():
         resp.set_cookie("_sess_id", str(_sess_id), 60 * 60 * 24 * 17)
         _sess = new_cookies(get_client_ip(request.headers), request.user_agent.string, _sess_id)
         resp.set_cookie("_sess", _sess, 60 * 60 * 24 * 17)
+        resp.set_cookie("_guest", '0', 60 * 60 * 24 * 90)
         current_sessions[_sess] = {"client": client, "expires_in": 60 * 10, "stage": "pass"}
         hint = '<i>С доп. паролем ты сможешь долго оставаться в системе и вообще это для защиты твоих бесед</i>'
         text += f'<h3>Установи доп. пароль</h3>{passform.replace("%", f"{t}/pass?set=1")} {error}<p>{hint}</p>' \
