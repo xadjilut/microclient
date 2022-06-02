@@ -88,6 +88,7 @@ else:
 
 if os.path.exists("session.session"):
     guest_client = TelegramClient('session', api_id, api_hash, **client_args)
+    guest_client.parse_mode = "HTML"
     guest_client.start()
 else:
     try:
