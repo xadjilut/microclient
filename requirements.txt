@@ -9,3 +9,4 @@ pytz~=2022.1
 hypercorn~=0.13.2
 Werkzeug~=2.1.2
 ipwhois~=1.2.0
+emoji~=1.7.0

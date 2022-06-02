@@ -23,17 +23,21 @@ my_tz = pytz.timezone('Europe/Moscow')
 current_sessions = {}
 cidrs = {}
 
+client_args = {
+    "app_version": '2.0',
+    "device_model": "Web"
+}
 
 n = '\n'
 t = '/armyrf'
 dlpath = 'static/dl/'
-if not exists(normpath(dlpath)):
-    os.makedirs(normpath(dlpath), exist_ok=True)
 uploadpath = 'static/upload/'
-if not exists(normpath(uploadpath)):
-    os.makedirs(normpath(uploadpath), exist_ok=True)
+emojipath = 'static/emoji/'
+for path in [dlpath, uploadpath, emojipath]:
+    if not exists(normpath(path)):
+        os.makedirs(normpath(path), exist_ok=True)
 meta = '<meta property="og:title" content="телега для тапика"><meta property="og:site_name" content="/ArmyRF"><meta ' \
-       'property="og:description" content="Микроклиент для всех. Вопросы и предложения -> @armyrfchat"><meta ' \
+       'property="og:description" content="Микроклиент для всех. Вопросы и предложения -> @armyrfgroup"><meta ' \
        'property="og:image" content="https://murix.ru/0/h8.jpg"><meta property="og:image:width" content="240"><meta ' \
        'property="og:image:height" content="180"> '
 temp = f"<html><head><meta charset='utf-8'><title>телега для тапика</title>{meta}<link rel=\"shortcut icon\" " \

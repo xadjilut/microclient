@@ -4,6 +4,7 @@ import base64
 import datetime
 import io
 import logging
+import os
 import sys
 import time
 from asyncio import sleep
@@ -23,11 +24,11 @@ from werkzeug.utils import secure_filename
 
 from authorization import auth_required, auth, password, logout
 from helper import put_message_head, put_content, saltkey, hello_everybot, aeskey, get_title_or_name, pack_xid, \
-    xid2id, unpack_xid, guest_client
+    xid2id, unpack_xid, guest_client, render_emoji, fetch_emoji
 from ipworker import IpWorker
 from micrologging import microlog
 from values import my_tz, temp, t, config, fileform, form, dlpath, current_sessions, tgevents, wattext, \
-    faqtext, secret_key, uploadpath
+    faqtext, secret_key, uploadpath, emojipath
 
 app = Quart(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 200 * 1024
@@ -77,7 +78,7 @@ async def hello():
         text += f'<a href="{t}?offset={offset-50}">{escape("<<<")}</a> '
     if i > offset:
         text += f'<a href="{t}?offset={offset+50}">{escape(">>>")}</a>'
-    return temp.replace('%', text)
+    return render_emoji(temp.replace('%', text))
 
 
 @app.route(f'{t}/profile')
@@ -95,7 +96,7 @@ async def profile():
         text += f'<a href="{t}/auth?mode=guest">в гостевой аккаунт...</a>' \
                 f'<br><a href="{t}/logout">выйти</a>'
     text += '</p>'
-    return temp.replace('%', text)
+    return render_emoji(temp.replace('%', text))
     pass
 
 
@@ -171,7 +172,7 @@ async def dialog(xid):
 </div>'''
         text = (tmptext + text if not pagindict['reverse'] and not check else text + tmptext)
     text = texthead + text
-    return temp.replace('%', text)
+    return render_emoji(temp.replace('%', text))
 
 
 @app.route(f'{t}/dl/', methods=['GET', 'POST'])
@@ -215,6 +216,22 @@ async def dl_path(filename):
     return await send_file(normpath(dlpath + secure_filename(filename)), attachment_filename=filename)
 
 
+@app.route(f'{t}/emoji/<path:filename>')
+async def emoji_path(filename):
+    path = f"{emojipath}/{secure_filename(filename)}"
+    if not os.path.exists(path):
+        fetch_emoji(filename)
+    return await send_file(normpath(path), attachment_filename=filename)
+
+
+# @app.route(f'{t}/images/<path:filename>')
+# async def images_path(filename):
+#     path = f"static/images/{secure_filename(filename)}"
+#     if not os.path.exists(path):
+#
+#     pass
+
+
 @app.route(f'{t}/reply', methods=['GET', 'POST'])
 @rate_limit(3, datetime.timedelta(seconds=3))
 @auth_required
@@ -250,7 +267,7 @@ async def reply():
 <p><input type="submit" value='»' /></p></form><p>
 {fileform}</p><br>{"" 
 if not message_id else await put_content((await client.get_messages(peer, ids=[int(message_id)]))[0], client)}'''
-    return temp.replace('%', text)
+    return render_emoji(temp.replace('%', text))
 
 
 # for opening pm dialogs and searching by username
@@ -281,7 +298,7 @@ async def search(entity_str=''):
     for x in results:
         res += f'<div id={x.id}><a href="{t}/{xid}?message_id={x.id}&offset=25">' \
                f'{"<i>Message</i>" if not x.raw_text else x.raw_text[:20]}</a></div><p>'
-    return temp.replace('%', f'<b>Чё ищем?</b><br>{form}<p>{res}')
+    return render_emoji(temp.replace('%', f'<b>Чё ищем?</b><br>{form}<p>{res}'))
 
 
 # proxy (work with variable success)

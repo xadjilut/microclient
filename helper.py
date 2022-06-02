@@ -1,15 +1,19 @@
 import argparse
 import base64
+import io
 import logging
 import os
 import random
+import re
 import sys
 from hashlib import md5
 from html import escape
 from os.path import exists
 from time import time
 from typing import Tuple
+from urllib.request import urlopen
 
+import emoji
 import pyaes
 from PIL import Image
 from quart import request, g, session
@@ -20,7 +24,7 @@ from telethon.tl.types import User, MessageMediaPhoto, MessageMediaDocument, Mes
     MessageEntityMention
 
 from ipworker import IpWorker
-from values import t, n, temp, current_sessions, my_tz, config, cidrs
+from values import t, n, temp, current_sessions, my_tz, config, cidrs, emojipath, client_args
 
 
 class ArgV:
@@ -52,14 +56,13 @@ parser.add_argument("main_module", nargs="?", default="microclient:app", type=st
                     help=argparse.SUPPRESS)  # for hypercorn running too
 parser.parse_args(namespace=argv)
 
-
 api_id = os.environ.get("API_ID") or argv.api_id
 api_hash = os.environ.get("API_HASH") or argv.api_hash
 
 if argv.setup_guest:
     try:
         with sync.TelegramClient(
-                "session" if not argv.print_auth_key else StringSession(), api_id, api_hash) as _client:
+                "session" if not argv.print_auth_key else StringSession(), api_id, api_hash, **client_args) as _client:
             if argv.print_auth_key:
                 sys.stdout.write(f"Guest auth key: {_client.session.save()}\n")
     except:
@@ -84,16 +87,16 @@ else:
     )
 
 if os.path.exists("session.session"):
-    guest_client = TelegramClient('session', api_id, api_hash)
+    guest_client = TelegramClient('session', api_id, api_hash, **client_args)
     guest_client.start()
 else:
     try:
         guest_auth_key = os.environ.get("GUEST_AUTH_KEY")
         if guest_auth_key:
-            guest_client = TelegramClient(StringSession(guest_auth_key), api_id, api_hash)
+            guest_client = TelegramClient(StringSession(guest_auth_key), api_id, api_hash, **client_args)
         else:
-            guest_client = TelegramClient(StringSession(), api_id, api_hash)
-            raise Exception()
+            guest_client = TelegramClient(StringSession(), api_id, api_hash, **client_args)
+            raise Exception("Guest account session is not set")
         guest_client.parse_mode = "HTML"
         guest_client.start()
     except:
@@ -101,12 +104,7 @@ else:
 
 
 def check_cookies(cookies_hash: str, ip: str, user_agent: str, sess_id: int):
-    if not cookies_hash:
-        return False
-    ip_part = md5(ip.encode()).hexdigest()[:11]
-    user_agent_part = md5(user_agent.encode() + int.to_bytes(sess_id, 8, 'big')).hexdigest()[11:]
-    ip_end_part = md5(md5(ip.encode()).digest()).hexdigest()[-6:]
-    return cookies_hash == ip_part + user_agent_part + ip_end_part
+    return bool(cookies_hash) and cookies_hash == new_cookies(ip, user_agent, sess_id)
 
 
 async def decrypt_session_string(cookies_str: str, key1: bytes, key2: bytes,
@@ -114,7 +112,7 @@ async def decrypt_session_string(cookies_str: str, key1: bytes, key2: bytes,
     if not cookies_str:
         raise Exception("cookies string is empty")
     current = current_sessions.get(_sess)
-    if current and 'client' in current and current.get('stage') != 'pass' and not _const_id:
+    if current and 'client' in current and not _const_id:
         client = current['client']
     else:
         session_string_b64 = cookies_str.encode()
@@ -130,7 +128,7 @@ async def decrypt_session_string(cookies_str: str, key1: bytes, key2: bytes,
         crypt = pyaes.AESModeOfOperationCTR(key)
         session_string_encoded = crypt.decrypt(session_string_cipher)
         session_string = session_string_encoded.decode()
-        client = TelegramClient(StringSession(session_string), api_id, api_hash)
+        client = TelegramClient(StringSession(session_string), api_id, api_hash, **client_args)
         client.parse_mode = "HTML"
         await client.start()
         current_sessions[_sess] = {"client": client, "expires_in": int(time()) + 60 * 60 * 3}
@@ -176,6 +174,8 @@ def get_client_ip(headers, force_print=False) -> str:
             ips = []
         for ip in ips:
             if ip.strip() and not IpWorker.ip_spec_contains(ip.strip()):
+                if force_print:
+                    return ip.strip()
                 ipnum = IpWorker.ip2num(ip.strip())
                 for k, v in cidrs.items():
                     if v[0] <= ipnum <= v[1]:
@@ -192,7 +192,7 @@ def get_client_ip(headers, force_print=False) -> str:
 
 
 def check_phone(phone: str):
-    return (phone.startswith('+') and phone[1:].isnumeric())\
+    return (phone.startswith('+') and phone[1:].isnumeric()) \
            or phone.isnumeric()
 
 
@@ -249,6 +249,41 @@ def xid2hash(xid: int) -> int:
     return xid >> 54
 
 
+def render_emoji(html_in: str):
+    answer = ''
+    i = 0
+    for _emoji in emoji.emoji_list(html_in):
+        text = re.findall(r'[0-9a-f]+', ascii(_emoji['emoji']))
+        text[:] = [x.lstrip("0") for x in text]
+        if text[0].__len__() % 4:
+            if text[0].__len__() == 1:
+                text[0] = hex(ord(text[0])).replace('x', '0')
+            elif text[0].__len__() == 2:
+                text[0] = "00" + text[0]
+        answer += html_in[i:_emoji['match_start']] + \
+            f"<img src='{t}/emoji/{'-'.join(text)}.jpeg'> "
+        i = _emoji['match_end']
+    return answer + html_in[i:]
+
+
+def fetch_emoji(filename: str):
+    path = filename[:-5]
+    resp = urlopen(f"https://web.telegram.org/z/img-apple-160/{path}.png")
+    b = io.BytesIO(resp.read())
+    b.seek(0)
+    im = Image.open(b)
+    if im.mode in ['P', 'PA', 'L', 'LA']:
+        im.load()
+        im_rgb = im.convert('RGBA')
+    else:
+        im_rgb = im
+    background = Image.new("RGB", im_rgb.size, (255, 255, 255))
+    background.paste(im_rgb, mask=im_rgb.split()[3])
+    im_rgb = background
+    im_rgb.thumbnail((24, 24))
+    im_rgb.save(f'{emojipath}/{filename}', 'JPEG', quality=50)
+
+
 # message's header generator
 async def put_message_head(x, xid):
     res = ''
@@ -281,13 +316,21 @@ async def put_content(x: Message, client: TelegramClient, limited=None):
     res = ''
     if x.media.__class__ == MessageMediaPhoto:
         mediatype = x.media.photo
+        im = None
         img = f'static/images/{mediatype.dc_id}_{mediatype.id}.jpeg'
-        if not exists(img):
-            await client.download_media(x, img)
-            im = Image.open(img)
-            im.thumbnail((128, 128))
-            im.save(img, 'JPEG', quality=40)
-        res += f'<img src="/{img}"/><p>'
+        try:
+            if not exists(img):
+                await client.download_media(x, img)
+                im = Image.open(img)
+                im.thumbnail((128, 128))
+                im.save(img, 'JPEG', quality=40)
+            res += f'<img src="/{img}"/><p>'
+        except Exception as e:
+            logging.warning(f"corrupt image file - {e}")
+            if im:
+                im.close()
+            if os.path.exists(img):
+                os.remove(img)
     if x.media.__class__ == MessageMediaDocument:
         mediatype = x.media.document
         mime, ext = mediatype.mime_type.split('/')

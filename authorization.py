@@ -10,7 +10,7 @@ from telethon.sessions import SQLiteSession
 
 from helper import api_id, api_hash, check_cookies, decrypt_session_string, aeskey, new_cookies, check_phone, \
     encrypt_session_string, get_client_ip, guest_client
-from values import secret_key, current_sessions, temp, authform, t, passform
+from values import secret_key, current_sessions, temp, authform, t, passform, client_args
 
 
 def auth_required(func):
@@ -21,7 +21,12 @@ def auth_required(func):
         if request.cookies.get('_guest', '1') == '1' and guest_client.session.auth_key:
             g.__setattr__(f"client{_sess_id}", guest_client)
             session[f"client_id"] = f"client{_sess_id}"
-            return await func(*args, **kwargs)
+            try:
+                return await func(*args, **kwargs)
+            except ConnectionError as e:
+                logging.warning(e)
+                await guest_client.connect()
+                return await func(*args, **kwargs)
         try:
             _sess = request.cookies.get('_sess')
             norm_cookies = check_cookies(
@@ -44,7 +49,12 @@ def auth_required(func):
             if request.cookies.get("conststr"):
                 return redirect(url_for("password"))
             return redirect(url_for('auth'))
-        return await func(*args, **kwargs)
+        try:
+            return await func(*args, **kwargs)
+        except ConnectionError as e:
+            logging.warning(e)
+            del current_sessions[_sess]['client']
+            return temp.replace('%', '<h3>Клиент внезапно отключился</h3>Обнови страницу')
 
     return wrapper
 
@@ -88,7 +98,7 @@ async def auth():
         try:
             if phone:
                 if check_phone(phone):
-                    client = TelegramClient(SQLiteSession(), api_id, api_hash)
+                    client = TelegramClient(SQLiteSession(), api_id, api_hash, **client_args)
                     await client.connect()
                     await client.send_code_request(phone)
                     current['client'] = client
@@ -151,7 +161,6 @@ async def auth():
         resp.set_cookie("_sess_id", str(_sess_id), 60 * 60 * 24 * 17)
         _sess = new_cookies(get_client_ip(request.headers), request.user_agent.string, _sess_id)
         resp.set_cookie("_sess", _sess, 60 * 60 * 24 * 17)
-        resp.set_cookie("_guest", '0', 60 * 60 * 24 * 90)
         current_sessions[_sess] = {"client": client, "expires_in": 60 * 10, "stage": "pass"}
         hint = '<i>С доп. паролем ты сможешь долго оставаться в системе и вообще это для защиты твоих бесед</i>'
         text += f'<h3>Установи доп. пароль</h3>{passform.replace("%", f"{t}/pass?set=1")} {error}<p>{hint}</p>' \
