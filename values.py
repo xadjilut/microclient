@@ -5,6 +5,8 @@ from os.path import normpath, exists
 import pytz as pytz
 from hypercorn import Config
 
+from guard import Guard
+
 config = Config()
 
 if not os.path.exists("secret_key.txt"):
@@ -22,6 +24,10 @@ my_tz = pytz.timezone('Europe/Moscow')
 
 current_sessions = {}
 cidrs = {}
+# blacklist = Guard('black')
+# whitelist = Guard('white')
+# lightlist = Guard('light')
+# darklist = Guard('dark')
 
 client_args = {
     "app_version": '2.0',

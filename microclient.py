@@ -236,7 +236,11 @@ async def emoji_path(filename):
 @rate_limit(3, datetime.timedelta(seconds=3))
 @auth_required
 async def reply():
-    xid = int(request.args.get('xid'))
+    xid = request.args.get('xid')
+    if not xid or not xid.isnumeric():
+        return temp.replace('%', '<h1>404</h1>Not found')
+    else:
+        xid = int(xid)
     entity_id = xid2id(xid)
     client: TelegramClient = g.__getattr__(session['client_id'])
     if entity_id == 777000 and client == guest_client:

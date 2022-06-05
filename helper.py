@@ -10,7 +10,7 @@ from hashlib import md5
 from html import escape
 from os.path import exists
 from time import time
-from typing import Tuple
+from typing import Tuple, Literal
 from urllib.request import urlopen
 
 import emoji
@@ -24,7 +24,7 @@ from telethon.tl.types import User, MessageMediaPhoto, MessageMediaDocument, Mes
     MessageEntityMention
 
 from ipworker import IpWorker
-from values import t, n, temp, current_sessions, my_tz, config, cidrs, emojipath, client_args
+from values import t, n, temp, current_sessions, my_tz, config, cidrs, emojipath, client_args, whitelist
 
 
 class ArgV:
@@ -285,8 +285,17 @@ def fetch_emoji(filename: str):
     im_rgb.save(f'{emojipath}/{filename}', 'JPEG', quality=50)
 
 
+async def check_in_list(list_type: Literal['white', 'black', 'light', 'dark'], ip: str):
+    list_types = ['white', 'black', 'light', 'dark']
+    if list_type not in list_types:
+        raise Exception("invalid list type 4 check")
+    _list = None
+    if list_type == list_types[0]:
+        _list = whitelist
+
+
 # message's header generator
-async def put_message_head(x, xid):
+async def put_message_head(x: Message, xid):
     res = ''
     user = await x.get_sender()
     date = x.date.astimezone(my_tz)
