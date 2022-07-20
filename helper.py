@@ -24,7 +24,7 @@ from telethon.tl.types import User, MessageMediaPhoto, MessageMediaDocument, Mes
     MessageEntityMention
 
 from ipworker import IpWorker
-from values import t, n, temp, current_sessions, my_tz, config, cidrs, emojipath, client_args, whitelist
+from values import t, n, temp, current_sessions, my_tz, config, cidrs, emojipath, client_args
 
 
 class ArgV:
