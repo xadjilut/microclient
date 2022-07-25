@@ -5,7 +5,7 @@ from os.path import normpath, exists
 import pytz as pytz
 from hypercorn import Config
 
-from guard import Guard
+# from guard import Guard
 
 config = Config()
 
@@ -43,11 +43,13 @@ for path in [dlpath, uploadpath, emojipath]:
     if not exists(normpath(path)):
         os.makedirs(normpath(path), exist_ok=True)
 meta = '<meta property="og:title" content="телега для тапика"><meta property="og:site_name" content="/ArmyRF"><meta ' \
-       'property="og:description" content="Микроклиент для всех. Вопросы и предложения -> @armyrfgroup"><meta ' \
-       'property="og:image" content="https://murix.ru/0/h8.jpg"><meta property="og:image:width" content="240"><meta ' \
-       'property="og:image:height" content="180"> '
-temp = f"<html><head><meta charset='utf-8'><title>телега для тапика</title>{meta}<link rel=\"shortcut icon\" " \
-       f"href=\"https://murix.ru/0/hU.ico\"></head><body>%</body></html> "
+       'property="og:description" content="Микроклиент для всех. Вопросы и предложения -> ' \
+       'https://t.me/armyrfgroup"><meta property="og:image" content="https://murix.ru/0/h8.jpg">' \
+       '<meta property="og:image:width" content="240"><meta property="og:image:height" content="180">'
+refreshmeta = '<meta http-equiv="refresh" content="5">'
+ttemp = "<html><head><meta charset='utf-8'><title>телега для тапика</title>{meta}<link rel=\"shortcut icon\" " \
+        "href=\"https://murix.ru/0/hU.ico\"></head><body>%</body></html> "
+temp = ttemp.format(meta=meta)
 wattext = """<h3>Что за дичь?</h3><br>
 <img src='http://murix.ru/0/hk.gif'/></br><br>Это - самопальный веб-клиент Телеграма
 , созданный для самых слабеньких и стареньких браузеров. Создан для таких браузеров, которые, 

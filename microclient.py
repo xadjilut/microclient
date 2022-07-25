@@ -28,7 +28,7 @@ from helper import put_message_head, put_content, saltkey, hello_everybot, aeske
 from ipworker import IpWorker
 from micrologging import microlog
 from values import my_tz, temp, t, config, fileform, form, dlpath, current_sessions, tgevents, wattext, \
-    faqtext, secret_key, uploadpath, emojipath
+    faqtext, secret_key, uploadpath, emojipath, ttemp, meta, refreshmeta
 
 app = Quart(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 200 * 1024
@@ -341,7 +341,8 @@ def user_agent():
 # server time
 @app.route('/time')
 def curtime():
-    return temp.replace('%', datetime.datetime.now(my_tz).strftime('%H:%M:%S<br>%Y-%h-%d'))
+    t = ttemp.format(meta=meta+refreshmeta)
+    return t.replace('%', datetime.datetime.now(my_tz).strftime('%H:%M:%S<br>%Y-%h-%d'))
 
 
 async def main():
