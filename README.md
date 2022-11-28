@@ -13,22 +13,15 @@ This full client web-app allow to receive text messages, images, stickers and vo
 </ul>
 
 <h2>Installation</h2>
-<h3>Heroku:</h3>
-<a href="https://heroku.com/deploy">
-  <img src="https://www.herokucdn.com/deploy/button.svg" alt="Deploy">
-</a>
 <h3>Manual:</h3>
 <code>python3 -m pip install --user -r requirements.txt</code>
 
 <h2>Configuration</h2>
 <ul>
   <li><p>Obtain api credentials (<code>api_id</code> and <code>api_hash</code>) to https://my.telegram.org</p></li>
-  <li><p>Found session file with "session" name using terminal:</p>
+  <li><p>For enable a guest mode, you can found session file with "session" name using terminal:</p>
     <p><code>python microclient.py --api-id &#60;your api_id&#62; --api-hash &#60;your api_hash&#62; --setup-guest</code></p>
   <p>Enter phone, code, optional password and close terminal.</p></li>
-  <li><p>Heroku requires an auth key string, run it:</p>
-    <p><code>python microclient.py --api-id &#60;your api_id&#62; --api-hash &#60;your api_hash&#62; --setup-guest --print-auth-key</code></p>
-  <p>Enter phone, code, optional password, copy char set after "Guest auth key: " and put into AES_KEY config var in Heroku app settings.</p></li>
 </ul>
 
 <h2>Running</h2>
@@ -56,4 +49,10 @@ This full client web-app allow to receive text messages, images, stickers and vo
   <li>/time</li>
   <li>/ua</li>
 </ul>
+
+<h2>Docker</h2>
+<h3>Build:</h3><code>docker build -t microclient .</code>
+<h3>Run it:</h3>
+<code>docker run -d -p 8090:8090 -v $(pwd):/root microclient</code>
+
 <h1>❗️Deploy it before the start of general mobilization!🚀</h1>
